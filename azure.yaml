@@ -1,0 +1,4 @@
+name: microsoft-discovery-gromacs-sample
+infra:
+  provider: terraform
+  path: infra
