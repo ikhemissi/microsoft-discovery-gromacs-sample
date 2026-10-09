@@ -2,3 +2,14 @@ name: microsoft-discovery-gromacs-sample
 infra:
   provider: terraform
   path: infra
+hooks:
+  postdeploy:
+    shell: sh
+    run: python3 scripts/deploy-discovery.py
+    interactive: false
+    continueOnError: false
+workflows:
+  up:
+    steps:
+      - azd: provision
+      - azd: hooks run postdeploy

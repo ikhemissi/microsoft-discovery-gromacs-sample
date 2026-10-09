@@ -4,7 +4,7 @@ Microsoft Discovery infrastructure using Azure Developer CLI (`azd`) and Terrafo
 translated from the official [Discovery deployment quickstart](https://github.com/Azure/azure-quickstart-templates/tree/9a286202372ff9a9a4f4465e1ef30d7b0f3650c6/quickstarts/microsoft.discovery/discovery-infra-deployment).
 
 - **Infrastructure:** network, managed identity, storage, container registry, supercomputer, node pool,
-	workspace, chat model and project. Tool registration and job execution are separate.
+	workspace, chat model and project. Temporary azd hooks publish and register the CPU tool and agent.
 - **Experiment:** [lysozyme in water](experiments/lysozyme-water/README.md), an
 	educational GROMACS baseline, not a validated formulation study.
 - **State:** Azure Blob Storage using your Azure CLI login and Entra authentication,
@@ -98,8 +98,64 @@ Discovery's configured kubelet identity inherits the existing resource-group
 
 Provisioning exports `AZURE_CONTAINER_REGISTRY_NAME`,
 `AZURE_CONTAINER_REGISTRY_ENDPOINT`, and `AZURE_CONTAINER_REGISTRY_ID` to azd.
-Image publication, tool registration, and simulation execution remain separate steps.
+The temporary deployment hook publishes the CPU image and registers the tool and agent.
+Simulation execution remains a separate, explicitly authorized step.
 ACR remote builds require additional ACR Tasks permissions; these aren't granted here.
+
+## Deploy The Tool And Agent
+
+The temporary [deployment script](scripts/deploy-discovery.py) is registered as a
+project-level `postdeploy` hook. The custom `azd up` workflow provisions Terraform
+and runs that hook in sequence; `azd provision` remains infrastructure-only.
+No synthetic services or custom extension hosts are required. This hook targets
+Linux/macOS with Python 3 and Podman or Docker. Install its YAML parser first:
+
+```bash
+python3 -m pip install -r scripts/requirements.txt
+```
+
+After provisioning, preview the resolved definitions without Azure requests,
+image publication, registration, or environment writes:
+
+```bash
+DISCOVERY_DEPLOY_DRY_RUN=true azd hooks run postdeploy --environment dev
+```
+
+Review the generated files under `.azure/dev/discovery/`. A dry run references
+the image tag only; actual deployment resolves and pins the published digest.
+Then deploy through either path:
+
+```bash
+azd up --environment dev
+# Or deploy only the tool and agent against existing infrastructure:
+azd hooks run postdeploy --environment dev
+```
+
+The hook checks the workspace, project, model and CPU node pool, builds the
+Python-enabled CPU image, publishes it with a temporary Entra registry login,
+registers the tool, waits for successful provisioning, and upserts the agent.
+It preserves both source YAML files and the agent's confirmation settings.
+An update can create a new immutable agent version. Failures stop deployment;
+accepted operations are not reported as success until completion is verified.
+No simulation, input upload, GPU deployment, or bookshelf indexing is performed.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `DISCOVERY_CONTAINER_ENGINE` | `podman` | Set to `docker` to use Docker instead. |
+| `DISCOVERY_SKIP_IMAGE_PUBLISH` | `false` | Reuse the existing ACR CPU tag, resolving its digest. Does not verify that it matches current sources. |
+| `DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME` | Name from `DISCOVERY_CHAT_MODEL_ID` | Bind to an existing model deployment in this workspace. |
+
+Set persistent choices with `azd env set NAME VALUE`. Registration requires ARM
+write access and Discovery project data access, in addition to ACR publishing
+permissions. This hook does not grant roles or expand infrastructure capacity.
+
+After successful stages it exports `SERVICE_GROMACS_TOOL_RESOURCE_ID`,
+`SERVICE_GROMACS_TOOL_IMAGE`, `DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME`, and
+`SERVICE_GROMACS_AGENT_NAME` using `azd env set`. These are the output/binding
+contract a future Discovery extension can preserve. They are not credentials
+or proof that an agent-driven scientific workflow has been validated.
+Registry credentials use password-stdin and an automatically removed temporary
+container-engine configuration, not committed files or command-line passwords.
 
 ## Bootstrap State Storage
 
@@ -186,6 +242,7 @@ terraform -chdir=infra init -backend=false
 terraform -chdir=infra fmt -check -recursive
 terraform -chdir=infra validate
 terraform -chdir=infra test
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_deploy_discovery.py' -v
 ```
 
 Tests and previews do not guarantee live regional capacity.

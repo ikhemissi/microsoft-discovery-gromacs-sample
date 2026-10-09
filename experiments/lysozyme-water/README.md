@@ -9,8 +9,9 @@ the tool and help explain its outputs. This is an educational baseline, not a
 validated formulation study or evidence of protein protection.
 
 The first milestone is a complete water-only run. Glycerol comparisons are the
-second milestone and are not implemented yet. No Azure resources or jobs are
-created by these scripts.
+second milestone and are not implemented yet. The local preparation and runner
+scripts do not create Azure resources or submit cloud jobs. The separate azd
+deployment hook publishes and registers the CPU tool and agent.
 
 ## Inputs And Assumptions
 
@@ -156,6 +157,15 @@ and logs reporting `2025.2-Debian_2025.2_1`. The temporary registration was remo
 afterward. This verifies ACR-backed tool registration and runtime execution, not
 simulation execution, input/output mounts, or agent-driven orchestration.
 
+On 2026-10-10, the temporary azd deployment hook passed against the real `dev`
+Discovery workspace. It published the CPU image pinned to digest
+`sha256:1e43981465a395b62a546dd4167359b5bc225c94ee77af23fd5d5ac3dd53ec36`,
+registered `lysozyme-water-cpu` with provisioning state `Succeeded`, and deployed
+`lysozyme-water-gromacs` version `1`. Authenticated read-back verified model
+`gpt-5-4`, the CPU tool binding, both confirmation settings enabled, and injected
+data-handling tools enabled. No simulation or agent invocation was submitted.
+This validates publication, registration and binding, not scientific execution.
+
 The longer `run` profile was started but stopped during fixed-volume
 equilibration due to local runtime; it has not been verified end to end.
 Discovery simulations and glycerol comparisons have not been run. No scientific
@@ -186,13 +196,53 @@ can be sampling noise. Preserve inconclusive results rather than force a ranking
 
 ## Use In Discovery
 
-The Terraform deployment supplies infrastructure only. [tool.cpu.yaml](tool.cpu.yaml)
-and [tool.gpu.yaml](tool.gpu.yaml) are unregistered drafts based on the pinned
+The Terraform deployment supplies infrastructure only. The temporary azd hook
+can register [tool.cpu.yaml](tool.cpu.yaml) and [agent.yaml](agent.yaml), following
+the [deployment instructions](../../README.md#deploy-the-tool-and-agent).
+[tool.cpu.yaml](tool.cpu.yaml) and [tool.gpu.yaml](tool.gpu.yaml) are based on the pinned
 [upstream GROMACS tool format](https://github.com/microsoft/discovery/tree/ddecc27bba4e3dec2a47f7f9a3c4f143a0c89b6d/agents/gromacs).
 They request two CPUs and respectively zero or one GPU. The Python command
 preserves script failures; the description requires checked subprocess execution
 of the packaged runner. These instructions guide generated code, not enforce a
 security boundary. A cloud job is billable; require confirmation before running.
+
+### Agent Definition
+
+[agent.yaml](agent.yaml) defines a prompt agent inspired by the
+[upstream GROMACS agent](https://github.com/microsoft/discovery/blob/main/agents/gromacs/agent.yaml).
+It follows the upstream plan, script, execution output and summary structure,
+but uses this sample's packaged runner instead of the upstream `gromacs_utils`
+library. It preserves OPLS-AA/SPC/E, forbids automatic recovery or GPU fallback,
+and requires successful execution, completed runner status, checked output
+checksums and actual result files before reporting completion.
+
+Resolve these placeholders when registering the agent:
+
+| Placeholder | Value |
+| --- | --- |
+| `{{CHAT-MODEL}}` | Chat-model/deployment identifier supported by the target Discovery project. |
+| `{{gromacsToolId}}` | Full ARM resource ID of the registered `lysozyme-water-cpu` tool, or the GPU tool for an explicitly selected GPU configuration. |
+
+The agent binds one tool, not both. Start with CPU; a GPU configuration requires
+the GPU image/tool and compatible GPU node-pool capacity, which the current
+deployment does not provide. Never bind the deleted version-check tool or use
+that diagnostic as evidence that the simulation workflow works.
+
+Both `humanInTheLoop` and tool `confirmation` are enabled so the agent can ask
+for clarification and tool invocation requires confirmation. Data-handling tools
+remain enabled for inputs and result sharing. Model sampling options are left
+unset for compatibility with the selected model. Prompt instructions are not a
+security boundary; review the generated script before confirming execution.
+
+The agent YAML was parsed and checked against the upstream Discovery agent
+schema. Its resolved CPU definition was deployed and read back successfully;
+it has not been invoked or evaluated. Agent orchestration and cloud input/output
+mounts remain unverified. Terraform provisioning does not
+resolve these placeholders. The temporary `postdeploy` hook renders a run-local
+copy under `.azure/<environment>/discovery/` and registers it after the CPU tool
+is ready. Running the hook is separate from this local validation status.
+
+### Tool Images And Execution
 
 Build the matching Python-enabled targets, which accept Discovery's script
 command instead of treating every argument as a runner CLI argument:
@@ -209,7 +259,8 @@ environment, publish the matching images, and pin their digests. Check the curre
 Discovery schema and registration guide, registry permissions, CPU/GPU SKU
 availability and pool costs. Local preparation does not publish images or register
 tools or agents; the separate CPU publication and temporary version-check tool
-validation are recorded above. The CPU/GPU simulation drafts remain unregistered.
+validation, followed by CPU tool and agent registration, are recorded above.
+The GPU tool remains unregistered; cloud simulation execution is still unverified.
 The default Dockerfile targets
 remain local CLI runners; use `--target discovery` for these tool drafts.
 
