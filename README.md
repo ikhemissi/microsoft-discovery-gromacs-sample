@@ -31,6 +31,18 @@ Terraform state is stored in Azure Blob Storage and accessed using the signed-in
 user's Microsoft Entra identity through Azure CLI. No storage account keys, SAS
 tokens, or service principal secrets are required.
 
+## First Experiment: Lysozyme In Water
+
+Start with the [lysozyme baseline walkthrough](experiments/lysozyme-water/README.md).
+It prepares a public protein structure, records input checksums, and runs a
+fixed CPU-only GROMACS procedure locally or through a separately registered
+Discovery GROMACS tool. A local container and failure-path checks are included.
+
+This short educational baseline demonstrates the workflow, not formulation
+performance or ingredient effectiveness. Glycerol concentration comparisons are
+a documented second stage and are not implemented yet. Scientific use requires
+review of the molecular model, parameters and sampling by an MD-experienced reviewer.
+
 ## Prerequisites
 
 - [Azure Developer CLI](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd).

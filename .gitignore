@@ -11,3 +11,5 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 !infra/main.tfvars.json
+/experiments/lysozyme-water/input/
+/experiments/lysozyme-water/results/
