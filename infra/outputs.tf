@@ -3,6 +3,21 @@ output "AZURE_RESOURCE_GROUP" {
   value       = azurerm_resource_group.main.name
 }
 
+output "AZURE_CONTAINER_REGISTRY_NAME" {
+  description = "Project-owned registry for Discovery tool images."
+  value       = azurerm_container_registry.tools.name
+}
+
+output "AZURE_CONTAINER_REGISTRY_ENDPOINT" {
+  description = "Login server used to tag and publish Discovery tool images."
+  value       = azurerm_container_registry.tools.login_server
+}
+
+output "AZURE_CONTAINER_REGISTRY_ID" {
+  description = "Registry resource ID for image publishing and access checks."
+  value       = azurerm_container_registry.tools.id
+}
+
 output "DISCOVERY_SUPERCOMPUTER_ID" {
   description = "Discovery Supercomputer resource ID."
   value       = azapi_resource.supercomputer.id

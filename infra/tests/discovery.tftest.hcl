@@ -34,6 +34,7 @@ run "quickstart_defaults" {
     condition = alltrue([
       for tags in [
         azurerm_resource_group.main.tags,
+        azurerm_container_registry.tools.tags,
         azurerm_virtual_network.discovery.tags,
         azurerm_user_assigned_identity.discovery.tags,
         azapi_resource.data_storage.tags,
@@ -46,6 +47,18 @@ run "quickstart_defaults" {
       ] : try(tags.CostControl == "Ignore" && tags.SecurityControl == "Ignore" && tags.Department == "chemistry", false)
     ])
     error_message = "Every taggable resource must carry the supplied global tags."
+  }
+
+  assert {
+    condition = (
+      azurerm_container_registry.tools.sku == "Basic" &&
+      !azurerm_container_registry.tools.admin_enabled &&
+      !azurerm_container_registry.tools.anonymous_pull_enabled &&
+      azurerm_container_registry.tools.public_network_access_enabled &&
+      azurerm_container_registry.tools.role_assignment_mode == "LegacyRegistryPermissions" &&
+      azurerm_container_registry.tools.location == "uksouth"
+    )
+    error_message = "The tools registry must use Basic SKU, authenticated RBAC access, and the data-plane region."
   }
 
   assert {
@@ -220,6 +233,7 @@ run "cross_region_gpu_and_azd_string_inputs" {
     condition = (
       azapi_resource.workspace.location == "uksouth" &&
       azapi_resource.supercomputer.location == "uksouth" &&
+      azurerm_container_registry.tools.location == "swedencentral" &&
       azurerm_virtual_network.discovery.location == "swedencentral" &&
       azurerm_user_assigned_identity.discovery.location == "swedencentral" &&
       azapi_resource.data_storage.location == "swedencentral" &&
@@ -305,4 +319,54 @@ run "reject_undersized_network" {
   }
 
   expect_failures = [var.vnet_address_prefix]
+}
+
+run "registry_publisher_and_discovery_pull_access" {
+  command = apply
+
+  plan_options {
+    target = [azurerm_role_assignment.acr_publisher, azurerm_role_assignment.discovery["acr_pull"]]
+  }
+
+  override_resource {
+    target = azurerm_resource_group.main
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test"
+    }
+  }
+
+  override_resource {
+    target = azurerm_container_registry.tools
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.ContainerRegistry/registries/acrtest"
+    }
+  }
+
+  override_resource {
+    target = azurerm_user_assigned_identity.discovery
+    values = {
+      principal_id = "00000000-0000-0000-0000-000000000003"
+    }
+  }
+
+  assert {
+    condition = (
+      azurerm_role_assignment.acr_publisher.scope == azurerm_container_registry.tools.id &&
+      azurerm_role_assignment.acr_publisher.principal_id == "00000000-0000-0000-0000-000000000002" &&
+      endswith(azurerm_role_assignment.acr_publisher.role_definition_id, "/8311e382-0749-4cb8-b61a-304f252e45ec") &&
+      azurerm_role_assignment.discovery["acr_pull"].scope == azurerm_resource_group.main.id &&
+      azurerm_role_assignment.discovery["acr_pull"].principal_id == "00000000-0000-0000-0000-000000000003" &&
+      endswith(azurerm_role_assignment.discovery["acr_pull"].role_definition_id, "/7f951dda-4ed3-4680-a7ca-43fe172d538d")
+    )
+    error_message = "The provisioner must get registry-scoped AcrPush and Discovery must retain inherited AcrPull."
+  }
+
+  assert {
+    condition = (
+      output.AZURE_CONTAINER_REGISTRY_NAME == azurerm_container_registry.tools.name &&
+      output.AZURE_CONTAINER_REGISTRY_ENDPOINT == azurerm_container_registry.tools.login_server &&
+      output.AZURE_CONTAINER_REGISTRY_ID == azurerm_container_registry.tools.id
+    )
+    error_message = "azd must receive the registry name, login server, and resource ID for publishing."
+  }
 }

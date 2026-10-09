@@ -3,7 +3,7 @@
 Microsoft Discovery infrastructure using Azure Developer CLI (`azd`) and Terraform,
 translated from the official [Discovery deployment quickstart](https://github.com/Azure/azure-quickstart-templates/tree/9a286202372ff9a9a4f4465e1ef30d7b0f3650c6/quickstarts/microsoft.discovery/discovery-infra-deployment).
 
-- **Infrastructure:** network, managed identity, storage, supercomputer, node pool,
+- **Infrastructure:** network, managed identity, storage, container registry, supercomputer, node pool,
 	workspace, chat model and project. Tool registration and job execution are separate.
 - **Experiment:** [lysozyme in water](experiments/lysozyme-water/README.md), an
 	educational GROMACS baseline, not a validated formulation study.
@@ -86,6 +86,20 @@ flag enabled while changing the authenticated principal replaces the grants.
 - Discovery tags are immutable; changing effective tags may require recreation.
 - Data storage permits network access but requires Entra authorization; shared-key
 	and anonymous access are disabled. Validate Discovery compatibility before restricting its firewall.
+
+## Tool Registry
+
+Terraform creates a billable **Basic** Azure Container Registry in the data-plane
+region. Its public endpoint requires Entra authentication; administrator credentials
+and anonymous pulls are disabled. The Terraform-authenticated provisioning account
+gets registry-scoped **AcrPush**, independently of `assign_provisioner_data_roles`.
+Discovery's configured kubelet identity inherits the existing resource-group
+**AcrPull** grant. Changing the publishing account replaces its Terraform-managed grant.
+
+Provisioning exports `AZURE_CONTAINER_REGISTRY_NAME`,
+`AZURE_CONTAINER_REGISTRY_ENDPOINT`, and `AZURE_CONTAINER_REGISTRY_ID` to azd.
+Image publication, tool registration, and simulation execution remain separate steps.
+ACR remote builds require additional ACR Tasks permissions; these aren't granted here.
 
 ## Bootstrap State Storage
 

@@ -148,9 +148,17 @@ image built successfully, reports GROMACS 2025.2 with CUDA support, and starts
 Python 3.12.3. A forced GPU computation correctly failed when no device was
 exposed. This is not a successful GPU simulation.
 
+Also on 2026-10-09, the CPU Discovery image was published to the project's ACR.
+A temporary action-based tool was registered with Microsoft Discovery using that
+image, then invoked through the Discovery job REST API on the existing CPU node
+pool. The fixed `gmx --version` command completed with operation status `Succeeded`
+and logs reporting `2025.2-Debian_2025.2_1`. The temporary registration was removed
+afterward. This verifies ACR-backed tool registration and runtime execution, not
+simulation execution, input/output mounts, or agent-driven orchestration.
+
 The longer `run` profile was started but stopped during fixed-volume
 equilibration due to local runtime; it has not been verified end to end.
-Discovery execution and glycerol comparisons have not been run. No scientific
+Discovery simulations and glycerol comparisons have not been run. No scientific
 convergence or formulation-performance claim follows from the smoke test.
 
 ## Inspect The Results
@@ -199,8 +207,10 @@ podman build --target discovery -f experiments/lysozyme-water/Dockerfile.gpu \
 Before registration, resolve the `{name}` registry placeholder for the target
 environment, publish the matching images, and pin their digests. Check the current
 Discovery schema and registration guide, registry permissions, CPU/GPU SKU
-availability and pool costs. No images have been pushed and no tools or agents
-have been registered by this local preparation. The default Dockerfile targets
+availability and pool costs. Local preparation does not publish images or register
+tools or agents; the separate CPU publication and temporary version-check tool
+validation are recorded above. The CPU/GPU simulation drafts remain unregistered.
+The default Dockerfile targets
 remain local CLI runners; use `--target discovery` for these tool drafts.
 
 1. First verify the baseline locally and review the scientific assumptions.
