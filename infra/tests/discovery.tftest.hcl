@@ -1,4 +1,10 @@
-mock_provider "azurerm" {}
+mock_provider "azurerm" {
+  mock_data "azurerm_client_config" {
+    defaults = {
+      object_id = "00000000-0000-0000-0000-000000000002"
+    }
+  }
+}
 mock_provider "azapi" {}
 
 variables {
@@ -14,6 +20,15 @@ variables {
 
 run "quickstart_defaults" {
   command = plan
+
+  assert {
+    condition = (
+      !var.assign_provisioner_data_roles &&
+      length(azurerm_role_assignment.provisioner) == 0 &&
+      length(data.azurerm_client_config.provisioner) == 0
+    )
+    error_message = "Provisioner data-role assignments and identity lookup must be disabled by default."
+  }
 
   assert {
     condition = alltrue([
@@ -118,6 +133,69 @@ run "quickstart_defaults" {
   }
 }
 
+run "assign_provisioner_data_roles_with_azd_string_input" {
+  command = apply
+
+  plan_options {
+    target = [azurerm_role_assignment.provisioner]
+  }
+
+  variables {
+    assign_provisioner_data_roles = "true"
+  }
+
+  override_resource {
+    target = azurerm_resource_group.main
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test"
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.data_storage
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Storage/storageAccounts/stgtest"
+    }
+  }
+
+  override_resource {
+    target = azapi_update_resource.blob_service
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Storage/storageAccounts/stgtest/blobServices/default"
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.output_container
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Storage/storageAccounts/stgtest/blobServices/default/containers/discoveryoutputs"
+    }
+  }
+
+  assert {
+    condition = (
+      var.assign_provisioner_data_roles &&
+      length(azurerm_role_assignment.provisioner) == 2 &&
+      length(data.azurerm_client_config.provisioner) == 1 &&
+      alltrue([
+        for assignment in azurerm_role_assignment.provisioner :
+        assignment.principal_id == "00000000-0000-0000-0000-000000000002"
+      ])
+    )
+    error_message = "Enabling the azd flag must assign exactly two roles to the authenticated provisioner."
+  }
+
+  assert {
+    condition = (
+      azurerm_role_assignment.provisioner["discovery_platform_contributor"].scope == azurerm_resource_group.main.id &&
+      azurerm_role_assignment.provisioner["discovery_platform_contributor"].role_definition_id == "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/01288891-85ee-45a7-b367-9db3b752fc65" &&
+      azurerm_role_assignment.provisioner["storage_blob_data_contributor"].scope == azapi_resource.output_container.id &&
+      azurerm_role_assignment.provisioner["storage_blob_data_contributor"].role_definition_id == "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+    )
+    error_message = "Provisioner roles must use the approved resource-group and container scopes."
+  }
+}
+
 run "cross_region_gpu_and_azd_string_inputs" {
   command = plan
 
@@ -171,7 +249,16 @@ run "empty_data_plane_region_uses_primary" {
   command = plan
 
   variables {
-    data_plane_location = ""
+    data_plane_location           = ""
+    assign_provisioner_data_roles = "false"
+  }
+
+  assert {
+    condition = (
+      length(azurerm_role_assignment.provisioner) == 0 &&
+      length(data.azurerm_client_config.provisioner) == 0
+    )
+    error_message = "An explicit false azd flag must disable provisioner roles and identity lookup."
   }
 
   assert {

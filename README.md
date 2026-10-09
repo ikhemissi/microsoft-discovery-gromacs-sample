@@ -54,12 +54,34 @@ Optional overrides: `azd env set NAME VALUE`.
 | `DISCOVERY_ENABLE_GHCP_AI` | `true` | GitHub Copilot and AI workbench feature tag. |
 | `DISCOVERY_ENABLE_EXTENSIONS` | `true` | VS Code Marketplace feature tag. |
 | `DISCOVERY_NETWORK_ISOLATION` | `true` | Workspace isolation tag. Public preview workbench access requires `false`. |
+| `DISCOVERY_ASSIGN_PROVISIONER_DATA_ROLES` | `false` | Assign Discovery and outputs-container data access to the provisioning account. |
 
 Terraform parameters in [infra/main.tfvars.json](infra/main.tfvars.json):
 
 | Parameter | Purpose |
 | --- | --- |
 | `global_tags` | Map of tags for all taggable Terraform-managed project resources; set to your environment's needs. Required resource tags take precedence. |
+| `assign_provisioner_data_roles` | Boolean, default `false`; controlled by `DISCOVERY_ASSIGN_PROVISIONER_DATA_ROLES`. |
+
+Enable provisioning-account data access with:
+
+```bash
+azd env set DISCOVERY_ASSIGN_PROVISIONER_DATA_ROLES true
+```
+
+This grants **Microsoft Discovery Platform Contributor** on the project resource
+group and **Storage Blob Data Contributor** only on the `discoveryoutputs` blob
+container. The recipient is Terraform's authenticated AzureRM principal, normally
+your Azure CLI user, not the Discovery managed identity. Azure Owner alone does
+not grant this data access. Creating the grants requires role-assignment permissions.
+
+If matching grants already exist, import their role-assignment resource IDs into
+`azurerm_role_assignment.provisioner["discovery_platform_contributor"]` and
+`azurerm_role_assignment.provisioner["storage_blob_data_contributor"]` using the
+environment's Terraform backend and with the flag enabled before provisioning;
+otherwise Azure can reject duplicate assignments. Once Terraform manages these
+grants, setting the flag to `false` removes them on the next provision. Keeping the
+flag enabled while changing the authenticated principal replaces the grants.
 
 - Discovery tags are immutable; changing effective tags may require recreation.
 - Data storage permits network access but requires Entra authorization; shared-key

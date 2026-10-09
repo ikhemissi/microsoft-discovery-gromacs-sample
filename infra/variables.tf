@@ -29,6 +29,12 @@ variable "subscription_id" {
   description = "Azure subscription in which to provision project resources."
 }
 
+variable "assign_provisioner_data_roles" {
+  type        = bool
+  description = "Assign Discovery Platform Contributor on the resource group and Storage Blob Data Contributor on the outputs container to the Terraform AzureRM authentication principal."
+  default     = false
+}
+
 variable "data_plane_location" {
   type        = string
   description = "Optional region for networking, identity, storage, and Discovery-managed resources; defaults to location."
