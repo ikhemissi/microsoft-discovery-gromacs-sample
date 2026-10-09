@@ -47,6 +47,8 @@ bash experiments/lysozyme-water/test.sh experiments/lysozyme-water/input
 
 The destination must not already exist. Keep an existing verified bundle for
 reproducibility; use a new directory when preparing a different protocol version.
+After changing the runner, prepare a fresh bundle in a new directory and use that
+bundle in the commands below. Do not overwrite the old checksummed runner.
 The generated input and result directories are git-ignored. The bundle contains
 the original PDB, selected protein, five parameter files, runner and provenance.
 If RCSB updates the source file, inspect that change before updating the pinned hash.
@@ -93,6 +95,41 @@ alongside results for long-term reproduction. The runner also saves the exact
 GROMACS version and effective simulation parameters. Package repositories and the
 base-image tag can change, so rebuilding later is not an immutable environment.
 
+### CPU Or GPU
+
+`GROMACS_ACCELERATION=cpu` is the default. Explicit `gpu` mode offloads short-range
+nonbonded forces during NVT, NPT and production; minimization, PME, bonded forces
+and updates remain on CPU. GPU mode requires a CUDA-enabled GROMACS build and a
+compatible NVIDIA device. It fails without either; it does not fall back to CPU.
+The selected mode is recorded in `run-provenance.txt`. No MDP settings change
+when switching acceleration.
+
+Build the CUDA runner with the checksum-pinned GROMACS 2025.2 source:
+
+```bash
+podman build -f experiments/lysozyme-water/Dockerfile.gpu --target gpu \
+  -t localhost/discovery-lysozyme:gpu experiments/lysozyme-water
+```
+
+The image targets A100/H100 (SM 80/90), CUDA 12.6 and x86-64 AVX2 CPUs. Building
+requires no GPU, but execution needs a compatible host driver and NVIDIA Container
+Toolkit. On a Podman version with NVIDIA CDI support and a configured CDI device:
+
+```bash
+podman run --rm --network none --device nvidia.com/gpu=all --cpus 2 --memory 8g \
+  -e GROMACS_ACCELERATION=gpu \
+  -v "$PWD/experiments/lysozyme-water/input:/input:ro" \
+  -v "$PWD/experiments/lysozyme-water/results:/output" \
+  localhost/discovery-lysozyme:gpu smoke /input /output/smoke-gpu-01 20261008 2
+```
+
+Docker uses `--gpus all` instead of the Podman CDI device flag. See the
+[NVIDIA Container Toolkit guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/).
+Review GROMACS LGPL and NVIDIA container redistribution terms before publishing
+images. Preserve image digests; the pinned source does not freeze base images or
+package repositories. GPU execution and CPU/GPU agreement still need validation
+on actual hardware; a small system may not benefit from offloading.
+
 ## Validation Status
 
 On 2026-10-08, the complete `smoke` profile passed locally with GROMACS
@@ -102,6 +139,14 @@ minimization converged in 388 steps. Each dynamics stage ran for 2 ps, and
 the production trajectory contained 21 frames spanning 0-2 ps. RMSD,
 radius-of-gyration and thermodynamic outputs were generated and input/output
 checksums passed. Failure-path tests also passed.
+
+On 2026-10-09, the CPU smoke workflow passed again in the Python-enabled
+Discovery build target with networking disabled; completed status, CPU provenance
+and recorded run checksums were verified. Tests cover CPU/GPU stage arguments,
+unsupported modes/builds and GPU failures without fallback. The CUDA Discovery
+image built successfully, reports GROMACS 2025.2 with CUDA support, and starts
+Python 3.12.3. A forced GPU computation correctly failed when no device was
+exposed. This is not a successful GPU simulation.
 
 The longer `run` profile was started but stopped during fixed-volume
 equilibration due to local runtime; it has not been verified end to end.
@@ -113,7 +158,7 @@ convergence or formulation-performance claim follows from the smoke test.
 | Output | Meaning |
 | --- | --- |
 | `run-status.txt` | `completed` means all scripted steps returned successfully. It is not scientific approval. `failed` requires inspection of logs. |
-| `run-provenance.txt` | Distinguishes the `smoke` and `run` profiles; copied/effective parameter files record their actual step counts. |
+| `run-provenance.txt` | Records profile, acceleration, seed and threads; copied/effective parameter files record actual step counts. |
 | `preparation.log`, stage logs | Molecular assignments, preprocessing messages, minimization convergence and simulation diagnostics. |
 | `backbone-rmsd.xvg` | Change in the protein backbone relative to the production starting structure, after alignment; time in ns, distance in nm. |
 | `radius-of-gyration.xvg` | How spread out the protein is; use the file's axis labels and units. |
@@ -133,26 +178,45 @@ can be sampling noise. Preserve inconclusive results rather than force a ranking
 
 ## Use In Discovery
 
-The Terraform deployment supplies infrastructure only. Build/register the
-[upstream GROMACS tool and agent](https://github.com/microsoft/discovery/tree/ddecc27bba4e3dec2a47f7f9a3c4f143a0c89b6d/agents/gromacs)
-separately using its deployment guide, reviewing its container dependencies,
-parameter licenses and compute settings. The local CPU image above is a test
-runner, not a replacement Discovery tool registration. A cloud job is billable.
+The Terraform deployment supplies infrastructure only. [tool.cpu.yaml](tool.cpu.yaml)
+and [tool.gpu.yaml](tool.gpu.yaml) are unregistered drafts based on the pinned
+[upstream GROMACS tool format](https://github.com/microsoft/discovery/tree/ddecc27bba4e3dec2a47f7f9a3c4f143a0c89b6d/agents/gromacs).
+They request two CPUs and respectively zero or one GPU. The Python command
+preserves script failures; the description requires checked subprocess execution
+of the packaged runner. These instructions guide generated code, not enforce a
+security boundary. A cloud job is billable; require confirmation before running.
+
+Build the matching Python-enabled targets, which accept Discovery's script
+command instead of treating every argument as a runner CLI argument:
+
+```bash
+podman build --target discovery -t localhost/discovery-lysozyme:discovery-cpu \
+  experiments/lysozyme-water
+podman build --target discovery -f experiments/lysozyme-water/Dockerfile.gpu \
+  -t localhost/discovery-lysozyme:discovery-gpu experiments/lysozyme-water
+```
+
+Before registration, resolve the `{name}` registry placeholder for the target
+environment, publish the matching images, and pin their digests. Check the current
+Discovery schema and registration guide, registry permissions, CPU/GPU SKU
+availability and pool costs. No images have been pushed and no tools or agents
+have been registered by this local preparation. The default Dockerfile targets
+remain local CLI runners; use `--target discovery` for these tool drafts.
 
 1. First verify the baseline locally and review the scientific assumptions.
 2. Upload the complete generated input directory as a Discovery data asset and
    attach it to the GROMACS conversation. Confirm the files are directly under
    the tool's read-only `/input` mount, not a nested directory.
-3. Ask the tool to run the attached procedure with two CPU threads. Use a new
+3. Start with the CPU draft and the packaged procedure with two CPU threads. Use a new
    output directory for every attempt. Do not ask the agent to invent settings.
 4. Download the result bundle and check `run-status.txt` and stage logs before
-   asking for interpretation. The upstream tool wrapper may finish even when a
-   generated script fails; a completed tool invocation is not proof of success.
+  asking for interpretation. Require both a successful checked subprocess and
+  completed run status; a completed tool invocation is not proof of success.
 
 Suggested first prompt:
 
 > Run the attached lysozyme-in-water technical smoke test. Use the GROMACS tool
-> to execute `bash /input/run.sh smoke /input /output/smoke-01 20261008 2`
+> to execute `bash /opt/lysozyme-water/run.sh smoke /input /output/smoke-01 20261008 2`
 > through a checked subprocess call. Verify the input checksums. Do not change
 > molecular parameters, durations, protonation, constraints or warning handling.
 > If any step fails, stop and report the relevant logs; do not retry with altered

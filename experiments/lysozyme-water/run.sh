@@ -8,7 +8,8 @@ usage() {
 		'       bash run.sh smoke INPUT_DIRECTORY NEW_OUTPUT_DIRECTORY [SEED] [THREADS]' \
 		'prepare downloads 1AKI and packages the baseline inputs; it runs no simulation.' \
 		'run uses 100 ps per dynamics stage; smoke uses 2 ps and is only a technical test.' \
-		'Both require GROMACS 2024+ with thread-MPI; defaults: seed 20261008, 2 CPU threads.'
+		'Both require GROMACS 2024+ with thread-MPI; defaults: seed 20261008, 2 CPU threads.' \
+		'GROMACS_ACCELERATION=cpu (default) or gpu; GPU mode requires CUDA and an NVIDIA device.'
 }
 
 fail() {
@@ -69,6 +70,8 @@ run() {
 	local threads="${4:-2}"
 	local profile="${5:-run}"
 	local gmx="${GMX:-gmx}"
+	local acceleration="${GROMACS_ACCELERATION:-cpu}"
+	[[ "$acceleration" == cpu || "$acceleration" == gpu ]] || fail 'GROMACS_ACCELERATION must be cpu or gpu.'
 	[[ "$seed" =~ ^[1-9][0-9]{0,8}$ ]] || fail 'SEED must be an integer from 1 to 999999999.'
 	[[ "$threads" =~ ^[1-9][0-9]{0,2}$ ]] || fail 'THREADS must be an integer from 1 to 999.'
 	require_command "$gmx"
@@ -96,8 +99,12 @@ run() {
 			-e 's/^nstlog[[:space:]]*=.*/nstlog = 50/' nvt.mdp npt.mdp md.mdp
 	fi
 	"$gmx" --version > gromacs-version.txt 2>&1
-	printf 'profile=%s\nseed=%s\nthreads=%s\nforce_field=oplsaa\nwater_model=spce\nstarted_utc=%s\n' \
-		"$profile" "$seed" "$threads" "$(date -u +%FT%TZ)" > run-provenance.txt
+	if [[ "$acceleration" == gpu ]]; then
+		grep -Eiq '^GPU support:[[:space:]]+CUDA' gromacs-version.txt || fail 'GPU mode requires a CUDA-enabled GROMACS build.'
+	fi
+	printf 'profile=%s\nseed=%s\nthreads=%s\nacceleration=%s\nforce_field=oplsaa\nwater_model=spce\nstarted_utc=%s\n' \
+		"$profile" "$seed" "$threads" "$acceleration" "$(date -u +%FT%TZ)" > run-provenance.txt
+	local dynamics_options=(-ntmpi 1 -ntomp "$threads" -nb "$acceleration" -pme cpu -bonded cpu -update cpu)
 
 	printf 'Preparing the protein, water and counterions (%s profile).\n' "$profile"
 	"$gmx" pdb2gmx -f protein.pdb -o processed.gro -p topol.top \
@@ -114,13 +121,13 @@ run() {
 	grep -q 'converged to Fmax <' em.log || fail 'Minimization did not meet its force threshold; inspect em.log.'
 	printf 'Running the fixed-volume stage.\n'
 	"$gmx" grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -o nvt.tpr -po nvt-effective.mdp > nvt-preprocess.log 2>&1
-	"$gmx" mdrun -deffnm nvt -ntmpi 1 -ntomp "$threads" -nb cpu -pme cpu > nvt-console.log 2>&1
+	"$gmx" mdrun -deffnm nvt "${dynamics_options[@]}" > nvt-console.log 2>&1
 	printf 'Running the pressure-controlled stage.\n'
 	"$gmx" grompp -f npt.mdp -c nvt.gro -r em.gro -t nvt.cpt -p topol.top -o npt.tpr -po npt-effective.mdp > npt-preprocess.log 2>&1
-	"$gmx" mdrun -deffnm npt -ntmpi 1 -ntomp "$threads" -nb cpu -pme cpu > npt-console.log 2>&1
+	"$gmx" mdrun -deffnm npt "${dynamics_options[@]}" > npt-console.log 2>&1
 	printf 'Running the unrestrained stage.\n'
 	"$gmx" grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -o md.tpr -po md-effective.mdp > md-preprocess.log 2>&1
-	"$gmx" mdrun -deffnm md -ntmpi 1 -ntomp "$threads" -nb cpu -pme cpu > md-console.log 2>&1
+	"$gmx" mdrun -deffnm md "${dynamics_options[@]}" > md-console.log 2>&1
 	if grep -Eiq 'LINCS WARNING|constraint warning|can not be settled' ./*.log; then
 		fail 'Numerical instability detected; inspect logs before interpreting any output.'
 	fi
