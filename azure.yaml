@@ -1,15 +1,46 @@
 name: microsoft-discovery-gromacs-sample
+requiredVersions:
+  azd: ">=1.35.0"
+  extensions:
+    ikhemissi.azd.discovery: "0.2.0"
 infra:
   provider: terraform
   path: infra
-hooks:
-  postdeploy:
-    shell: sh
-    run: python3 scripts/deploy-discovery.py
-    interactive: false
-    continueOnError: false
+discovery:
+  schemaVersion: "1.0"
+  workspaceResourceId: ${DISCOVERY_WORKSPACE_ID}
+  projectResourceId: ${DISCOVERY_PROJECT_ID}
+  nodePoolResourceId: ${DISCOVERY_NODE_POOL_ID}
+services:
+  simulation:
+    host: discovery.tool
+    project: ./tools/gromacs
+    language: docker
+    docker:
+      path: ./Dockerfile
+      context: .
+      target: discovery
+      platform: linux/amd64
+      registry: ${AZURE_CONTAINER_REGISTRY_ENDPOINT}
+    config:
+      definition: ./tool.cpu.yaml
+      image:
+        mode: build
+        infraNode: worker
+  researcher:
+    host: discovery.agent
+    project: ./agents/lysozyme-water-gromacs
+    uses: [simulation]
+    config:
+      definition: ./agent.yaml
+      model:
+        deploymentName: ${DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME}
+      bindings:
+        gromacsToolId:
+          service: simulation
+          output: resourceId
 workflows:
   up:
     steps:
       - azd: provision
-      - azd: hooks run postdeploy
+      - azd: deploy --all

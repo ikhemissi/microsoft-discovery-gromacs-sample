@@ -4,8 +4,8 @@ Microsoft Discovery infrastructure using Azure Developer CLI (`azd`) and Terrafo
 translated from the official [Discovery deployment quickstart](https://github.com/Azure/azure-quickstart-templates/tree/9a286202372ff9a9a4f4465e1ef30d7b0f3650c6/quickstarts/microsoft.discovery/discovery-infra-deployment).
 
 - **Infrastructure:** network, managed identity, storage, container registry, supercomputer, node pool,
-	workspace, chat model and project. Temporary azd hooks publish and register the CPU tool and agent.
-- **Experiment:** [lysozyme in water](experiments/lysozyme-water/README.md), an
+	workspace, chat model and project. The community azd Discovery extension builds and publishes the CPU tool and registers the tool and agent.
+- **Experiment:** [lysozyme in water](tools/gromacs/README.md), an
 	educational GROMACS baseline, not a validated formulation study.
 - **State:** Azure Blob Storage using your Azure CLI login and Entra authentication,
 	without storage keys or service-principal secrets.
@@ -98,64 +98,90 @@ Discovery's configured kubelet identity inherits the existing resource-group
 
 Provisioning exports `AZURE_CONTAINER_REGISTRY_NAME`,
 `AZURE_CONTAINER_REGISTRY_ENDPOINT`, and `AZURE_CONTAINER_REGISTRY_ID` to azd.
-The temporary deployment hook publishes the CPU image and registers the tool and agent.
+The community Discovery extension publishes the CPU image and registers the tool and agent.
 Simulation execution remains a separate, explicitly authorized step.
 ACR remote builds require additional ACR Tasks permissions; these aren't granted here.
 
 ## Deploy The Tool And Agent
 
-The temporary [deployment script](scripts/deploy-discovery.py) is registered as a
-project-level `postdeploy` hook. The custom `azd up` workflow provisions Terraform
-and runs that hook in sequence; `azd provision` remains infrastructure-only.
-No synthetic services or custom extension hosts are required. This hook targets
-Linux/macOS with Python 3 and Podman or Docker. Install its YAML parser first:
+The [azd configuration](azure.yaml) uses community extension
+[ikhemissi.azd.discovery](https://github.com/ikhemissi/azd-microsoft-discovery),
+version `0.2.0`, with azd `>=1.35.0`. Its `simulation` service builds
+the Python-enabled `discovery` Dockerfile stage, publishes it to ACR, and
+registers the CPU tool using a verified immutable digest. `researcher` depends
+on that service through `uses`, binds its tool ID, and selects the existing
+model through Terraform output `DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME`.
+
+Install the prebuilt **Linux amd64** bundle from
+[GitHub Releases](https://github.com/ikhemissi/azd-microsoft-discovery/releases/tag/v0.2.0)
+using the same azd configuration you will use for this sample. No Go compiler,
+extension developer tooling, or extension repository checkout is required:
 
 ```bash
-python3 -m pip install -r scripts/requirements.txt
+VERSION=0.2.0
+azd extension install \
+	"https://github.com/ikhemissi/azd-microsoft-discovery/releases/download/v${VERSION}/ikhemissi-azd-discovery_${VERSION}.zip" &&
+azd discovery version
 ```
 
-After provisioning, preview the resolved definitions without Azure requests,
-image publication, registration, or environment writes:
+To update, install the newer release's bundle URL and update the version in
+[azure.yaml](azure.yaml) to match. Bundle installations do not track an extension
+registry, so use the bundle URL rather than `azd extension update` or installation
+by ID. Add `--force` only when deliberately replacing an installed build.
+
+Each release includes `SHA256SUMS` for integrity verification; download only
+from the trusted repository. Checksums detect corruption, not publisher identity.
+The extension is community-maintained, not officially supported by Microsoft;
+other platforms are not covered by the published Linux bundle.
+
+If using `AZD_CONFIG_DIR`, keep that same value for installation and sample
+commands; extensions and authentication are configuration-scoped. The version
+requirement does not automatically install a GitHub release bundle.
+
+From this sample directory, inspect configuration and package locally:
 
 ```bash
-DISCOVERY_DEPLOY_DRY_RUN=true azd hooks run postdeploy --environment dev
+azd discovery plan --environment dev --output json
+azd discovery doctor --environment dev --output json
+export AZD_CONTAINER_RUNTIME=podman
+azd package simulation --environment dev
+azd package researcher --environment dev
 ```
 
-Review the generated files under `.azure/dev/discovery/`. A dry run references
-the image tag only; actual deployment resolves and pins the published digest.
-Then deploy through either path:
+Plan/doctor validate local configuration, not live Azure readiness. Packaging
+does not push or deploy, but can download images/packages and consume local
+resources. Provisioning outputs must be available for plan/doctor. Use Docker
+instead by selecting the appropriate azd container runtime.
+
+When authorized to provision and deploy:
 
 ```bash
 azd up --environment dev
-# Or deploy only the tool and agent against existing infrastructure:
-azd hooks run postdeploy --environment dev
+# Or deploy against infrastructure already provisioned with current outputs:
+azd deploy --all --environment dev
 ```
 
-The hook checks the workspace, project, model and CPU node pool, builds the
-Python-enabled CPU image, publishes it with a temporary Entra registry login,
-registers the tool, waits for successful provisioning, and upserts the agent.
-It preserves both source YAML files and the agent's confirmation settings.
-An update can create a new immutable agent version. Failures stop deployment;
-accepted operations are not reported as success until completion is verified.
-No simulation, input upload, GPU deployment, or bookshelf indexing is performed.
+The custom up workflow deliberately runs Terraform provision before deployment,
+so registry and model outputs exist before packaging. `azd provision` remains
+infrastructure-only. An older environment needs provisioning to export the new
+model-name output before deployment.
 
-| Setting | Default | Purpose |
-| --- | --- | --- |
-| `DISCOVERY_CONTAINER_ENGINE` | `podman` | Set to `docker` to use Docker instead. |
-| `DISCOVERY_SKIP_IMAGE_PUBLISH` | `false` | Reuse the existing ACR CPU tag, resolving its digest. Does not verify that it matches current sources. |
-| `DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME` | Name from `DISCOVERY_CHAT_MODEL_ID` | Bind to an existing model deployment in this workspace. |
+Registration requires ARM write access and Discovery project data access, in
+addition to ACR publication permissions. The extension does not grant roles,
+expand compute, invoke the agent, submit simulations, upload inputs, deploy GPU
+tools, or index bookshelves. Source definitions and confirmation policies remain
+unchanged during deployment; the unsupported authoring-only `displayName` field
+has been removed from the agent manifest.
 
-Set persistent choices with `azd env set NAME VALUE`. Registration requires ARM
-write access and Discovery project data access, in addition to ACR publishing
-permissions. This hook does not grant roles or expand infrastructure capacity.
-
-After successful stages it exports `SERVICE_GROMACS_TOOL_RESOURCE_ID`,
-`SERVICE_GROMACS_TOOL_IMAGE`, `DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME`, and
-`SERVICE_GROMACS_AGENT_NAME` using `azd env set`. These are the output/binding
-contract a future Discovery extension can preserve. They are not credentials
-or proof that an agent-driven scientific workflow has been validated.
-Registry credentials use password-stdin and an automatically removed temporary
-container-engine configuration, not committed files or command-line passwords.
+On 2026-10-12, extension `0.2.0` was installed from its GitHub release bundle,
+all 16 local deployment regression tests passed, and `azd deploy --all` completed
+successfully for both services in the existing `dev` environment using Podman.
+No infrastructure provisioning, agent invocation, simulation, or indexing was
+performed during this verification. Earlier cloud registration used the legacy
+[deployment script](scripts/deploy-discovery.py), which remains as a historical
+reference but is no longer wired into azd. Its `DISCOVERY_CONTAINER_ENGINE`,
+`DISCOVERY_SKIP_IMAGE_PUBLISH`, and legacy `SERVICE_GROMACS_*` output aliases are
+not the extension's contract. Agent-driven simulations remain unverified.
 
 ## Bootstrap State Storage
 

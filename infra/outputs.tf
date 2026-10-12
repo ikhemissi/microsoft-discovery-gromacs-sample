@@ -38,6 +38,11 @@ output "DISCOVERY_CHAT_MODEL_ID" {
   value       = azapi_resource.chat_model.id
 }
 
+output "DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME" {
+  description = "Existing Discovery chat model deployment name for agents."
+  value       = azapi_resource.chat_model.name
+}
+
 output "DISCOVERY_STORAGE_CONTAINER_ID" {
   description = "Discovery storage registration resource ID, distinct from the Azure blob container."
   value       = azapi_resource.discovery_storage.id

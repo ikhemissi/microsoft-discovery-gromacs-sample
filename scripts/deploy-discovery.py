@@ -17,7 +17,8 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENT = ROOT / "experiments" / "lysozyme-water"
+EXPERIMENT = ROOT / "tools" / "gromacs"
+AGENT = ROOT / "agents" / "lysozyme-water-gromacs" / "agent.yaml"
 ARM = "https://management.azure.com"
 ARM_VERSION = "2026-06-01"
 DATA_VERSION = "2026-02-01-preview"
@@ -81,7 +82,7 @@ def settings(environment):
 
 def definitions(values, image):
     tool = yaml.safe_load((EXPERIMENT / "tool.cpu.yaml").read_text())
-    agent = yaml.safe_load((EXPERIMENT / "agent.yaml").read_text())
+    agent = yaml.safe_load(AGENT.read_text())
     tool = copy.deepcopy(tool)
     agent = copy.deepcopy(agent)
     if not re.fullmatch(r"[A-Za-z0-9-]{3,24}", tool["name"]):

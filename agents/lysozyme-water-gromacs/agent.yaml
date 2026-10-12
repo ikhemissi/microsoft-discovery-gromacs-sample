@@ -1,6 +1,5 @@
 kind: prompt
 name: lysozyme-water-gromacs
-displayName: Lysozyme In Water (GROMACS)
 description: >-
   Runs the sample's fixed-protocol lysozyme-in-water GROMACS workflow through
   a configured CPU or GPU tool. Verifies inputs, execution status and provenance,

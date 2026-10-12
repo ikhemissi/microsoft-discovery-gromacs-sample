@@ -42,7 +42,7 @@ class DiscoveryDeploymentTests(unittest.TestCase):
         }
 
     def test_bindings_and_confirmation_preserve_source(self):
-        sources = {name: (deployment.EXPERIMENT / name).read_bytes() for name in ("agent.yaml", "tool.cpu.yaml")}
+        sources = {path: path.read_bytes() for path in (deployment.AGENT, deployment.EXPERIMENT / "tool.cpu.yaml")}
         tool, agent, payload, tool_id = deployment.definitions(self.values, self.image)
         self.assertEqual(tool["infra"][0]["image"]["acr"], self.image)
         self.assertEqual(agent["model"]["id"], "gpt-5-4")
@@ -52,8 +52,8 @@ class DiscoveryDeploymentTests(unittest.TestCase):
         self.assertIn("bash /opt/lysozyme-water/run.sh PROFILE", payload["foundryDetails"]["definition"]["instructions"])
         self.assertIn("{{scriptName}}", tool["code_environments"][0]["command"])
         self.assertNotIn("{{", json.dumps(payload))
-        for name, content in sources.items():
-            self.assertEqual((deployment.EXPERIMENT / name).read_bytes(), content)
+        for path, content in sources.items():
+            self.assertEqual(path.read_bytes(), content)
 
     def test_missing_and_cross_workspace_inputs_fail(self):
         with self.assertRaisesRegex(ValueError, "Missing azd outputs"):
@@ -167,10 +167,14 @@ class DiscoveryDeploymentTests(unittest.TestCase):
     def test_azd_workflow_keeps_provision_and_deploy_separate(self):
         configuration = yaml.safe_load((deployment.ROOT / "azure.yaml").read_text())
         self.assertEqual(configuration["workflows"]["up"]["steps"], [
-            {"azd": "provision"}, {"azd": "hooks run postdeploy"},
+            {"azd": "provision"}, {"azd": "deploy --all"},
         ])
-        self.assertNotIn("postprovision", configuration["hooks"])
-        self.assertFalse(configuration["hooks"]["postdeploy"]["continueOnError"])
+        self.assertNotIn("hooks", configuration)
+        self.assertEqual(configuration["services"]["simulation"]["project"], "./tools/gromacs")
+        self.assertEqual(configuration["services"]["researcher"]["project"], "./agents/lysozyme-water-gromacs")
+        for service in configuration["services"].values():
+            definition = deployment.ROOT / service["project"] / service["config"]["definition"]
+            self.assertTrue(definition.is_file())
 
     def test_agent_verification_uses_latest_foundry_version(self):
         _, _, payload, _ = deployment.definitions(self.values, self.image)

@@ -11,7 +11,7 @@ validated formulation study or evidence of protein protection.
 The first milestone is a complete water-only run. Glycerol comparisons are the
 second milestone and are not implemented yet. The local preparation and runner
 scripts do not create Azure resources or submit cloud jobs. The separate azd
-deployment hook publishes and registers the CPU tool and agent.
+Discovery extension publishes and registers the CPU tool and agent.
 
 ## Inputs And Assumptions
 
@@ -42,8 +42,8 @@ It downloads the public structure, checks its pinned fingerprint, and records
 source, retrieval time and input checksums. It does not execute downloaded code.
 
 ```bash
-bash experiments/lysozyme-water/run.sh prepare experiments/lysozyme-water/input
-bash experiments/lysozyme-water/test.sh experiments/lysozyme-water/input
+bash tools/gromacs/run.sh prepare tools/gromacs/input
+bash tools/gromacs/test.sh tools/gromacs/input
 ```
 
 The destination must not already exist. Keep an existing verified bundle for
@@ -65,11 +65,11 @@ shortening minimization. These 6 ps only test the software path; they are not
 an equilibrated system or useful scientific sampling.
 
 ```bash
-podman build -t localhost/discovery-lysozyme:baseline experiments/lysozyme-water
-mkdir -p experiments/lysozyme-water/results
+podman build -t localhost/discovery-lysozyme:baseline tools/gromacs
+mkdir -p tools/gromacs/results
 podman run --rm --network none --cpus 2 --memory 2g \
-  -v "$PWD/experiments/lysozyme-water/input:/input:ro" \
-  -v "$PWD/experiments/lysozyme-water/results:/output" \
+  -v "$PWD/tools/gromacs/input:/input:ro" \
+  -v "$PWD/tools/gromacs/results:/output" \
   localhost/discovery-lysozyme:baseline smoke /input /output/smoke-01 20261008 2
 ```
 
@@ -80,9 +80,9 @@ longer than an interactive demonstration; measure before promising a live run.
 Alternatively, with GROMACS 2024+ (thread-MPI) available as `gmx`:
 
 ```bash
-bash experiments/lysozyme-water/run.sh smoke \
-  experiments/lysozyme-water/input \
-  experiments/lysozyme-water/results/smoke-01 20261008 2
+bash tools/gromacs/run.sh smoke \
+  tools/gromacs/input \
+  tools/gromacs/results/smoke-01 20261008 2
 ```
 
 The output directory must be new. Failed runs remain available for inspection;
@@ -108,8 +108,8 @@ when switching acceleration.
 Build the CUDA runner with the checksum-pinned GROMACS 2025.2 source:
 
 ```bash
-podman build -f experiments/lysozyme-water/Dockerfile.gpu --target gpu \
-  -t localhost/discovery-lysozyme:gpu experiments/lysozyme-water
+podman build -f tools/gromacs/Dockerfile.gpu --target gpu \
+  -t localhost/discovery-lysozyme:gpu tools/gromacs
 ```
 
 The image targets A100/H100 (SM 80/90), CUDA 12.6 and x86-64 AVX2 CPUs. Building
@@ -119,8 +119,8 @@ Toolkit. On a Podman version with NVIDIA CDI support and a configured CDI device
 ```bash
 podman run --rm --network none --device nvidia.com/gpu=all --cpus 2 --memory 8g \
   -e GROMACS_ACCELERATION=gpu \
-  -v "$PWD/experiments/lysozyme-water/input:/input:ro" \
-  -v "$PWD/experiments/lysozyme-water/results:/output" \
+  -v "$PWD/tools/gromacs/input:/input:ro" \
+  -v "$PWD/tools/gromacs/results:/output" \
   localhost/discovery-lysozyme:gpu smoke /input /output/smoke-gpu-01 20261008 2
 ```
 
@@ -196,8 +196,8 @@ can be sampling noise. Preserve inconclusive results rather than force a ranking
 
 ## Use In Discovery
 
-The Terraform deployment supplies infrastructure only. The temporary azd hook
-can register [tool.cpu.yaml](tool.cpu.yaml) and [agent.yaml](agent.yaml), following
+The Terraform deployment supplies infrastructure only. The community azd Discovery extension
+can register [tool.cpu.yaml](tool.cpu.yaml) and [../../agents/lysozyme-water-gromacs/agent.yaml](../../agents/lysozyme-water-gromacs/agent.yaml), following
 the [deployment instructions](../../README.md#deploy-the-tool-and-agent).
 [tool.cpu.yaml](tool.cpu.yaml) and [tool.gpu.yaml](tool.gpu.yaml) are based on the pinned
 [upstream GROMACS tool format](https://github.com/microsoft/discovery/tree/ddecc27bba4e3dec2a47f7f9a3c4f143a0c89b6d/agents/gromacs).
@@ -208,7 +208,7 @@ security boundary. A cloud job is billable; require confirmation before running.
 
 ### Agent Definition
 
-[agent.yaml](agent.yaml) defines a prompt agent inspired by the
+[../../agents/lysozyme-water-gromacs/agent.yaml](../../agents/lysozyme-water-gromacs/agent.yaml) defines a prompt agent inspired by the
 [upstream GROMACS agent](https://github.com/microsoft/discovery/blob/main/agents/gromacs/agent.yaml).
 It follows the upstream plan, script, execution output and summary structure,
 but uses this sample's packaged runner instead of the upstream `gromacs_utils`
@@ -238,9 +238,11 @@ The agent YAML was parsed and checked against the upstream Discovery agent
 schema. Its resolved CPU definition was deployed and read back successfully;
 it has not been invoked or evaluated. Agent orchestration and cloud input/output
 mounts remain unverified. Terraform provisioning does not
-resolve these placeholders. The temporary `postdeploy` hook renders a run-local
-copy under `.azure/<environment>/discovery/` and registers it after the CPU tool
-is ready. Running the hook is separate from this local validation status.
+resolve these placeholders. The extension overrides the deployment copy's model
+from `DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME` and resolves the tool binding after
+the CPU tool is ready. Extension `0.2.0` successfully deployed both services to
+the existing `dev` environment on 2026-10-12 using Podman. No agent invocation
+or simulation was performed; the earlier registration used the legacy hook.
 
 ### Tool Images And Execution
 
@@ -249,9 +251,9 @@ command instead of treating every argument as a runner CLI argument:
 
 ```bash
 podman build --target discovery -t localhost/discovery-lysozyme:discovery-cpu \
-  experiments/lysozyme-water
-podman build --target discovery -f experiments/lysozyme-water/Dockerfile.gpu \
-  -t localhost/discovery-lysozyme:discovery-gpu experiments/lysozyme-water
+  tools/gromacs
+podman build --target discovery -f tools/gromacs/Dockerfile.gpu \
+  -t localhost/discovery-lysozyme:discovery-gpu tools/gromacs
 ```
 
 Before registration, resolve the `{name}` registry placeholder for the target
