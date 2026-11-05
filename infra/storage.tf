@@ -2,7 +2,7 @@ resource "azapi_resource" "data_storage" {
   type      = "Microsoft.Storage/storageAccounts@2023-05-01"
   name      = "stg${local.resource_suffix}"
   parent_id = azurerm_resource_group.main.id
-  location  = local.data_plane_location
+  location  = local.target_location
   tags      = azurerm_resource_group.main.tags
 
   body = {
@@ -18,10 +18,10 @@ resource "azapi_resource" "data_storage" {
         defaultAction = "Allow"
         bypass        = "AzureServices"
         virtualNetworkRules = [
-          for name, subnet in azurerm_subnet.discovery : {
-            id     = subnet.id
+          for name in keys(local.workload_subnets) : {
+            id     = azurerm_subnet.discovery[name].id
             action = "Allow"
-          } if name != "privateEndpointSubnet"
+          }
         ]
       }
     }
