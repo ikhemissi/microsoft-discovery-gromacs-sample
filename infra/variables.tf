@@ -16,11 +16,11 @@ variable "environment_name" {
 
 variable "location" {
   type        = string
-  description = "Discovery control-plane region supported by the upstream quickstart."
+  description = "Discovery home region for the resource group and Discovery control-plane resources."
 
   validation {
     condition     = contains(["eastus", "swedencentral", "uksouth"], var.location)
-    error_message = "Use eastus, swedencentral, or uksouth, as supported by the reference template."
+    error_message = "Use eastus, swedencentral, or uksouth as the Discovery home region."
   }
 }
 
@@ -35,20 +35,35 @@ variable "assign_provisioner_data_roles" {
   default     = false
 }
 
-variable "data_plane_location" {
+variable "target_location" {
   type        = string
-  description = "Optional region for networking, identity, storage, and Discovery-managed resources; defaults to location."
+  description = "Optional cross-region target for networking, identity, storage, registry, and Discovery-managed resources; defaults to location (single region)."
   default     = null
 
+  # Public Azure regions where Microsoft Foundry projects are available, which Discovery
+  # supports as cross-region targets: https://learn.microsoft.com/azure/foundry/reference/region-support
   validation {
-    condition     = var.data_plane_location == null || var.data_plane_location == "" || contains(["eastus", "swedencentral", "uksouth"], var.data_plane_location)
-    error_message = "Use eastus, swedencentral, uksouth, or leave the data-plane region unset."
+    condition = var.target_location == null || var.target_location == "" || contains([
+      "australiaeast", "brazilsouth", "canadacentral", "canadaeast", "centralindia",
+      "centralus", "eastasia", "eastus", "eastus2", "francecentral",
+      "germanywestcentral", "italynorth", "japaneast", "koreacentral", "northcentralus",
+      "northeurope", "norwayeast", "qatarcentral", "southafricanorth", "southcentralus",
+      "southindia", "southeastasia", "spaincentral", "swedencentral", "switzerlandnorth",
+      "uaenorth", "uksouth", "westeurope", "westus", "westus3",
+    ], var.target_location)
+    error_message = "Use a programmatic Azure region where Microsoft Foundry projects are available (for example westus3 or francecentral), or leave the target region unset."
   }
+}
+
+variable "skip_keyvault_nsp_association" {
+  type        = bool
+  description = "Add the SkipAssociateKeyVaultToNsp=true tag to the workspace and supercomputer; required for Microsoft-owned subscriptions."
+  default     = false
 }
 
 variable "vnet_address_prefix" {
   type        = string
-  description = "IPv4 /16 network from which six /24 Discovery subnets are allocated."
+  description = "IPv4 /16 network from which six /24 Discovery subnets and a /28 supercomputer management subnet are allocated."
   default     = "10.0.0.0/16"
 
   validation {

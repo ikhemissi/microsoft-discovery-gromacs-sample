@@ -1,9 +1,9 @@
 # Microsoft Discovery GROMACS Sample
 
 Microsoft Discovery infrastructure using Azure Developer CLI (`azd`) and Terraform,
-translated from the official [Discovery deployment quickstart](https://github.com/Azure/azure-quickstart-templates/tree/9a286202372ff9a9a4f4465e1ef30d7b0f3650c6/quickstarts/microsoft.discovery/discovery-infra-deployment).
+translated from the official [Discovery deployment quickstart](https://github.com/Azure/azure-quickstart-templates/tree/2c9c0d62fb6620fd90082ac2bd334f3f55712086/quickstarts/microsoft.discovery/discovery-infra-deployment).
 
-- **Infrastructure:** network, managed identity, storage, container registry, supercomputer, node pool,
+- **Infrastructure:** network with NAT gateway, managed identity, storage, container registry, supercomputer, node pool,
 	workspace, chat model and project. The community azd Discovery extension builds and publishes the CPU tool and registers the tool and agent.
 - **Experiment:** [lysozyme in water](tools/gromacs/README.md), an
 	educational GROMACS baseline, not a validated formulation study.
@@ -13,7 +13,7 @@ translated from the official [Discovery deployment quickstart](https://github.co
 ## Prerequisites
 
 - Complete the [official Discovery prerequisites](https://learn.microsoft.com/azure/microsoft-discovery/quickstart-infrastructure-portal#prerequisites), including access, roles, provider registration and regional quota.
-- Install [azd](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd), [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) and [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5, < 2.0 (>= 1.7 for tests).
+- Install [azd](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd), [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) and [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5, < 2.0 (>= 1.9 for tests).
 - Run commands in Bash from the repository root. State-storage setup requires storage creation and role-assignment permissions.
 
 ## Configure Environment
@@ -33,8 +33,46 @@ azd env set AZURE_SUBSCRIPTION_ID "$SUBSCRIPTION_ID"
 azd env set AZURE_LOCATION "$LOCATION"
 ```
 
-Supported regions: `eastus`, `swedencentral`, `uksouth`. Changing an existing
-deployment's region can replace resources; always review the preview.
+`AZURE_LOCATION` is the Discovery **home region**: `eastus`, `swedencentral`, or
+`uksouth`. Changing an existing deployment's region can replace resources;
+always review the preview.
+
+### Single Or Cross-Region Deployment
+
+By default everything is deployed in the home region. To
+[deploy across regions](https://learn.microsoft.com/azure/microsoft-discovery/how-to-deploy-across-regions),
+set a separate **target region**:
+
+```bash
+azd env set DISCOVERY_TARGET_LOCATION westus3
+```
+
+| Region | Resources |
+| --- | --- |
+| Home (`AZURE_LOCATION`) | Resource group, Discovery supercomputer, node pool, workspace, chat model deployment, storage container and project, and their managed resource groups. |
+| Target (`DISCOVERY_TARGET_LOCATION`) | Virtual network, NAT gateway and public IP, managed identity, storage account, container registry, and the resources Discovery creates inside its managed resource groups (compute and Foundry). |
+
+The workspace and supercomputer receive the `discovery.overridemrgregion` tag
+with the target region. Accepted target regions are the public Azure regions
+where [Microsoft Foundry projects](https://learn.microsoft.com/azure/foundry/reference/region-support)
+are available: `australiaeast`, `brazilsouth`, `canadacentral`, `canadaeast`,
+`centralindia`, `centralus`, `eastasia`, `eastus`, `eastus2`, `francecentral`,
+`germanywestcentral`, `italynorth`, `japaneast`, `koreacentral`,
+`northcentralus`, `northeurope`, `norwayeast`, `qatarcentral`,
+`southafricanorth`, `southcentralus`, `southindia`, `southeastasia`,
+`spaincentral`, `swedencentral`, `switzerlandnorth`, `uaenorth`, `uksouth`,
+`westeurope`, `westus`, `westus3`. The list is maintained in
+[infra/variables.tf](infra/variables.tf); update it when the Foundry list changes.
+
+- Before choosing a target region, confirm chat model availability
+	(`DISCOVERY_CHAT_MODEL`), model quota and node pool VM quota
+	(`DISCOVERY_VM_SIZE`) in that region, as well as any subscription policies
+	that restrict regions.
+- Use programmatic region names such as `westus3`, not display names.
+- Discovery reads the override tag only at creation time. To move an existing
+	environment to another target region, recreate it.
+- For Microsoft-owned subscriptions, also run
+	`azd env set DISCOVERY_SKIP_KEYVAULT_NSP true`.
 
 ## Discovery Settings
 
@@ -42,8 +80,9 @@ Optional overrides: `azd env set NAME VALUE`.
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
-| `DISCOVERY_DATA_PLANE_LOCATION` | Same as `AZURE_LOCATION` | Optional region for networking, identity, storage, and Discovery-managed resources. |
-| `DISCOVERY_VNET_ADDRESS_PREFIX` | `10.0.0.0/16` | IPv4 /16; subnet ranges .1 through .6 are allocated as /24s. |
+| `DISCOVERY_TARGET_LOCATION` | Same as `AZURE_LOCATION` | Optional cross-region target for networking, identity, storage, registry, and Discovery-managed resources. Falls back to the deprecated `DISCOVERY_DATA_PLANE_LOCATION`. |
+| `DISCOVERY_SKIP_KEYVAULT_NSP` | `false` | Adds `SkipAssociateKeyVaultToNsp: true` to the workspace and supercomputer; required for Microsoft-owned subscriptions. |
+| `DISCOVERY_VNET_ADDRESS_PREFIX` | `10.0.0.0/16` | IPv4 /16; subnet ranges .1 through .6 are allocated as /24s and `.7.0/28` as the supercomputer management subnet. |
 | `DISCOVERY_STORAGE_REPLICATION` | `GRS` | `ZRS`, `GRS`, `GZRS`, `RAGRS`, or `RAGZRS`. |
 | `DISCOVERY_VM_SIZE` | `Standard_D4s_v6` | Node pool VM size; this default is CPU-only. |
 | `DISCOVERY_MIN_NODES` | `0` | Minimum node count. |
@@ -86,10 +125,18 @@ flag enabled while changing the authenticated principal replaces the grants.
 - Discovery tags are immutable; changing effective tags may require recreation.
 - Data storage permits network access but requires Entra authorization; shared-key
 	and anonymous access are disabled. Validate Discovery compatibility before restricting its firewall.
+- Default outbound access is disabled on every subnet. The five workload subnets
+	use a Standard NAT gateway with a static public IP; the private endpoint subnet
+	and the `sc-mgmt` subnet do not. `sc-mgmt` is a `/28` delegated to
+	`Microsoft.ContainerService/managedClusters` and is passed to the supercomputer
+	as `managementSubnetId` for AKS API Server VNet Integration.
+- Environments provisioned before the NAT gateway and `sc-mgmt` subnet were
+	added cannot be updated in place reliably (the supercomputer and its subnets
+	change); recreate them with `azd down` and `azd provision`.
 
 ## Tool Registry
 
-Terraform creates a billable **Basic** Azure Container Registry in the data-plane
+Terraform creates a billable **Basic** Azure Container Registry in the target
 region. Its public endpoint requires Entra authentication; administrator credentials
 and anonymous pulls are disabled. The Terraform-authenticated provisioning account
 gets registry-scoped **AcrPush**, independently of `assign_provisioner_data_roles`.

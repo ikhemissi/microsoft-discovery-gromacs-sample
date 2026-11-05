@@ -1,7 +1,7 @@
 resource "azurerm_user_assigned_identity" "discovery" {
   name                = "uami-${local.resource_suffix}"
   resource_group_name = azurerm_resource_group.main.name
-  location            = local.data_plane_location
+  location            = local.target_location
   isolation_scope     = "Regional"
   tags                = azurerm_resource_group.main.tags
 }
