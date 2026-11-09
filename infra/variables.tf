@@ -40,18 +40,20 @@ variable "target_location" {
   description = "Optional cross-region target for networking, identity, storage, registry, and Discovery-managed resources; defaults to location (single region)."
   default     = null
 
-  # Public Azure regions where Microsoft Foundry projects are available, which Discovery
-  # supports as cross-region targets: https://learn.microsoft.com/azure/foundry/reference/region-support
+  # Public Azure regions where Microsoft Foundry projects are available
+  # (https://learn.microsoft.com/azure/foundry/reference/region-support) and Azure AI Search
+  # offers AI enrichment, agentic retrieval, semantic ranker and query rewrite
+  # (https://learn.microsoft.com/azure/search/search-region-support). VM size and chat
+  # model availability are not covered by this list; check them per region before deploying.
   validation {
     condition = var.target_location == null || var.target_location == "" || contains([
-      "australiaeast", "brazilsouth", "canadacentral", "canadaeast", "centralindia",
-      "centralus", "eastasia", "eastus", "eastus2", "francecentral",
-      "germanywestcentral", "italynorth", "japaneast", "koreacentral", "northcentralus",
-      "northeurope", "norwayeast", "qatarcentral", "southafricanorth", "southcentralus",
-      "southindia", "southeastasia", "spaincentral", "swedencentral", "switzerlandnorth",
-      "uaenorth", "uksouth", "westeurope", "westus", "westus3",
+      "australiaeast", "brazilsouth", "canadacentral", "centralindia", "centralus",
+      "eastasia", "eastus", "eastus2", "francecentral", "germanywestcentral",
+      "japaneast", "koreacentral", "northcentralus", "northeurope", "southafricanorth",
+      "southcentralus", "southeastasia", "swedencentral", "switzerlandnorth", "uaenorth",
+      "uksouth", "westeurope", "westus", "westus3",
     ], var.target_location)
-    error_message = "Use a programmatic Azure region where Microsoft Foundry projects are available (for example westus3 or francecentral), or leave the target region unset."
+    error_message = "Use a supported programmatic Azure target region listed in infra/variables.tf (for example westus3 or francecentral), or leave the target region unset."
   }
 }
 

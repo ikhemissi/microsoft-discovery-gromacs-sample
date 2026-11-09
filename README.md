@@ -55,16 +55,17 @@ azd env set DISCOVERY_TARGET_LOCATION westus3
 The workspace and supercomputer receive the `discovery.overridemrgregion` tag
 with the target region. Accepted target regions are the public Azure regions
 where [Microsoft Foundry projects](https://learn.microsoft.com/azure/foundry/reference/region-support)
-are available: `australiaeast`, `brazilsouth`, `canadacentral`, `canadaeast`,
-`centralindia`, `centralus`, `eastasia`, `eastus`, `eastus2`, `francecentral`,
-`germanywestcentral`, `italynorth`, `japaneast`, `koreacentral`,
-`northcentralus`, `northeurope`, `norwayeast`, `qatarcentral`,
-`southafricanorth`, `southcentralus`, `southindia`, `southeastasia`,
-`spaincentral`, `swedencentral`, `switzerlandnorth`, `uaenorth`, `uksouth`,
-`westeurope`, `westus`, `westus3`. The list is maintained in
-[infra/variables.tf](infra/variables.tf); update it when the Foundry list changes.
+are available and [Azure AI Search](https://learn.microsoft.com/azure/search/search-region-support)
+supports AI enrichment, agentic retrieval, semantic ranker and query rewrite:
+`australiaeast`, `brazilsouth`, `canadacentral`, `centralindia`, `centralus`,
+`eastasia`, `eastus`, `eastus2`, `francecentral`, `germanywestcentral`,
+`japaneast`, `koreacentral`, `northcentralus`, `northeurope`,
+`southafricanorth`, `southcentralus`, `southeastasia`, `swedencentral`,
+`switzerlandnorth`, `uaenorth`, `uksouth`, `westeurope`, `westus`, `westus3`.
+The list is maintained in [infra/variables.tf](infra/variables.tf); update it
+when either source changes. It doesn't cover VM size or chat model availability.
 
-- Before choosing a target region, confirm chat model availability
+- Before choosing a target region, confirm VM size and chat model availability
 	(`DISCOVERY_CHAT_MODEL`), model quota and node pool VM quota
 	(`DISCOVERY_VM_SIZE`) in that region, as well as any subscription policies
 	that restrict regions.

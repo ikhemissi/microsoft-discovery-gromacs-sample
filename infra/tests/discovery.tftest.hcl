@@ -380,6 +380,16 @@ run "reject_unsupported_target_region" {
   expect_failures = [var.target_location]
 }
 
+run "reject_target_region_without_ai_search_features" {
+  command = plan
+
+  variables {
+    target_location = "norwayeast"
+  }
+
+  expect_failures = [var.target_location]
+}
+
 run "reject_display_name_target_region" {
   command = plan
 
