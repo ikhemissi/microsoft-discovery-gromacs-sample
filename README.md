@@ -25,7 +25,7 @@ the whole environment, from the network to the agent, comes from one repository.
 ## What it shows
 
 - **Infrastructure:** network with NAT gateway, managed identity, storage, container registry, supercomputer, node pool,
-	workspace, chat model and project. The community azd Discovery extension builds and publishes the CPU tool and registers the tool and agent.
+	workspace, chat model, bookshelf and project. The community azd Discovery extension builds and publishes the CPU tool and registers the tool and agent.
 - **Experiment:** [lysozyme in water](tools/gromacs/README.md), an
 	educational GROMACS baseline, not a validated formulation study.
 - **State:** Azure Blob Storage using your Azure CLI login and Entra authentication,
@@ -35,7 +35,7 @@ the whole environment, from the network to the agent, comes from one repository.
 
 | Path | What it is |
 |---|---|
-| [infra/](infra) | Terraform: network, managed identity, storage, container registry, Discovery supercomputer, node pool, workspace, chat model and project |
+| [infra/](infra) | Terraform: network, managed identity, storage, container registry, Discovery supercomputer, node pool, workspace, chat model, bookshelf and project |
 | [tools/gromacs/](tools/gromacs) | The GROMACS tool: its images (CPU and GPU), the simulation inputs and the [experiment](tools/gromacs/README.md) |
 | [agents/](agents) | The researcher agent's definition |
 | [scripts/](scripts) | The legacy deployment script, kept as a historical reference, and its tests |
@@ -46,7 +46,7 @@ the whole environment, from the network to the agent, comes from one repository.
 ### 1. Prerequisites
 
 - Complete the [official Discovery prerequisites](https://learn.microsoft.com/azure/microsoft-discovery/quickstart-infrastructure-portal#prerequisites), including access, roles, provider registration and regional quota.
-- Install [azd](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd), [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) and [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5, < 2.0 (>= 1.9 for tests).
+- Install [azd](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd), [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) and [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5, < 2.0 (>= 1.11 for tests).
 - Run commands in Bash from the repository root. State-storage setup requires storage creation and role-assignment permissions.
 
 ### 2. Configure the environment
@@ -82,10 +82,10 @@ azd env set DISCOVERY_TARGET_LOCATION westus3
 
 | Region | Resources |
 | --- | --- |
-| Home (`AZURE_LOCATION`) | Resource group, Discovery supercomputer, node pool, workspace, chat model deployment, storage container and project, and their managed resource groups. |
+| Home (`AZURE_LOCATION`) | Resource group, Discovery supercomputer, node pool, workspace, chat model deployment, storage container, bookshelf and project, and their managed resource groups. |
 | Target (`DISCOVERY_TARGET_LOCATION`) | Virtual network, NAT gateway and public IP, managed identity, storage account, container registry, and the resources Discovery creates inside its managed resource groups (compute and Foundry). |
 
-The workspace and supercomputer receive the `discovery.overridemrgregion` tag
+The workspace, supercomputer and bookshelf receive the `discovery.overridemrgregion` tag
 with the target region. Accepted target regions are the public Azure regions
 where [Microsoft Foundry projects](https://learn.microsoft.com/azure/foundry/reference/region-support)
 are available and [Azure AI Search](https://learn.microsoft.com/azure/search/search-region-support)
@@ -265,9 +265,9 @@ Optional overrides: `azd env set NAME VALUE`.
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
 | `DISCOVERY_TARGET_LOCATION` | Same as `AZURE_LOCATION` | Optional cross-region target for networking, identity, storage, registry, and Discovery-managed resources. Falls back to the deprecated `DISCOVERY_DATA_PLANE_LOCATION`. |
-| `DISCOVERY_SKIP_KEYVAULT_NSP` | `false` | Adds `SkipAssociateKeyVaultToNsp: true` to the workspace and supercomputer; required for Microsoft-owned subscriptions. |
+| `DISCOVERY_SKIP_KEYVAULT_NSP` | `false` | Adds `SkipAssociateKeyVaultToNsp: true` to the workspace, supercomputer and bookshelf; required for Microsoft-owned subscriptions. |
 | `DISCOVERY_VNET_ADDRESS_PREFIX` | `10.0.0.0/16` | IPv4 /16; subnet ranges .1 through .6 are allocated as /24s and `.7.0/28` as the supercomputer management subnet. |
-| `DISCOVERY_STORAGE_REPLICATION` | `GRS` | `ZRS`, `GRS`, `GZRS`, `RAGRS`, or `RAGZRS`. |
+| `DISCOVERY_STORAGE_REPLICATION` | `GRS` | `LRS`, `ZRS`, `GRS`, `GZRS`, `RAGRS`, or `RAGZRS`. |
 | `DISCOVERY_VM_SIZE` | `Standard_D4s_v6` | Node pool VM size; this default is CPU-only. |
 | `DISCOVERY_MIN_NODES` | `0` | Minimum node count. |
 | `DISCOVERY_MAX_NODES` | `3` | Maximum node count, at least 1 and no lower than the minimum. |
@@ -277,6 +277,7 @@ Optional overrides: `azd env set NAME VALUE`.
 | `DISCOVERY_ENABLE_GHCP_AI` | `true` | GitHub Copilot and AI workbench feature tag. |
 | `DISCOVERY_ENABLE_EXTENSIONS` | `true` | VS Code Marketplace feature tag. |
 | `DISCOVERY_NETWORK_ISOLATION` | `true` | Workspace isolation tag. Public preview workbench access requires `false`. |
+| `DISCOVERY_BOOKSHELF_PUBLIC_ACCESS` | `Enabled` | Bookshelf data-plane public network access, `Enabled` or `Disabled`. `Disabled` blocks Discovery Studio unless you add a client private endpoint and private DNS. |
 | `DISCOVERY_ASSIGN_PROVISIONER_DATA_ROLES` | `false` | Assign Discovery and outputs-container data access to the provisioning account. |
 
 Terraform parameters in [infra/main.tfvars.json](infra/main.tfvars.json):
@@ -317,6 +318,23 @@ flag enabled while changing the authenticated principal replaces the grants.
 - Environments provisioned before the NAT gateway and `sc-mgmt` subnet were
 	added cannot be updated in place reliably (the supercomputer and its subnets
 	change); recreate them with `azd down` and `azd provision`.
+
+## Bookshelf
+
+Terraform creates a billable Discovery Bookshelf with `indexSize=small`, reusing
+the existing managed identity, search subnet and private-endpoint subnet. Its data
+plane accepts Entra-authenticated public access by default so Discovery Studio can
+reach it; set `DISCOVERY_BOOKSHELF_PUBLIC_ACCESS=Disabled` only with a client
+private endpoint. Provisioning exports `DISCOVERY_BOOKSHELF_ID` to azd.
+
+This creates infrastructure only, not an indexed knowledge base or an agent
+attachment. After provisioning, select the existing Bookshelf resource in your
+project's **AI Capabilities > Bookshelves > New Bookshelf** wizard, connect a
+document storage asset and create the knowledge base. Indexing is a separate,
+billable operation; it does not run during `azd provision` or `azd deploy`.
+The default GROMACS CPU node pool is not sized for memory-intensive indexing.
+Check [Bookshelf quota and indexing prerequisites](https://learn.microsoft.com/azure/microsoft-discovery/how-to-index-bookshelf-knowledgebase#prerequisites)
+before deploying or indexing, including embedding-model and search-compute quota.
 
 ## How the tool is published
 

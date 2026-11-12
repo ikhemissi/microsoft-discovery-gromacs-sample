@@ -70,6 +70,7 @@ run "quickstart_defaults" {
         azapi_resource.workspace.tags,
         azapi_resource.chat_model.tags,
         azapi_resource.discovery_storage.tags,
+        azapi_resource.bookshelf.tags,
         azapi_resource.project.tags
       ] : try(tags.CostControl == "Ignore" && tags.SecurityControl == "Ignore" && tags.Department == "chemistry", false)
     ])
@@ -168,9 +169,10 @@ run "quickstart_defaults" {
       azapi_resource.workspace.type == "Microsoft.Discovery/workspaces@2026-06-01" &&
       azapi_resource.chat_model.type == "Microsoft.Discovery/workspaces/chatModelDeployments@2026-06-01" &&
       azapi_resource.discovery_storage.type == "Microsoft.Discovery/storageContainers@2026-06-01" &&
+      azapi_resource.bookshelf.type == "Microsoft.Discovery/bookshelves@2026-06-01" &&
       azapi_resource.project.type == "Microsoft.Discovery/workspaces/projects@2026-06-01"
     )
-    error_message = "All six Discovery resources must use the reference API version."
+    error_message = "All seven Discovery resources must use the reference API version."
   }
 
   assert {
@@ -190,6 +192,59 @@ run "quickstart_defaults" {
       azurerm_virtual_network.discovery.location == "uksouth"
     )
     error_message = "Default compute, model, features, and single-region placement must match the quickstart."
+  }
+}
+
+run "bookshelf_configuration" {
+  command   = apply
+  state_key = "bookshelf"
+
+  plan_options {
+    target = [azapi_resource.bookshelf]
+  }
+
+  override_resource {
+    target = azurerm_resource_group.main
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test"
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.data_storage
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Storage/storageAccounts/stgtest"
+    }
+  }
+
+  override_resource {
+    target = azapi_update_resource.blob_service
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Storage/storageAccounts/stgtest/blobServices/default"
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.output_container
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Storage/storageAccounts/stgtest/blobServices/default/containers/discoveryoutputs"
+    }
+  }
+
+  assert {
+    condition = (
+      azapi_resource.bookshelf.parent_id == azurerm_resource_group.main.id &&
+      azapi_resource.bookshelf.location == "uksouth" &&
+      azapi_resource.bookshelf.body.properties.customerManagedKeys == "Disabled" &&
+      azapi_resource.bookshelf.body.properties.publicNetworkAccess == "Enabled" &&
+      azapi_resource.bookshelf.body.properties.privateEndpointSubnetId == azurerm_subnet.discovery["privateEndpointSubnet"].id &&
+      azapi_resource.bookshelf.body.properties.searchSubnetId == azurerm_subnet.discovery["searchSubnet"].id &&
+      keys(azapi_resource.bookshelf.body.properties.workloadIdentities) == [azurerm_user_assigned_identity.discovery.id] &&
+      azapi_resource.bookshelf.tags.indexSize == "small" &&
+      azapi_resource.bookshelf.tags.NetworkIsolation == "true" &&
+      output.DISCOVERY_BOOKSHELF_ID == azapi_resource.bookshelf.id
+    )
+    error_message = "The bookshelf must reuse the Discovery network and identity, default to Studio-reachable public access and small sizing, and export its resource ID."
   }
 }
 
@@ -275,6 +330,7 @@ run "cross_region_gpu_and_azd_string_inputs" {
       enable_ghcp_ai_features = "false"
       enable_extensions       = "false"
     }
+    bookshelf_public_network_access = "Disabled"
   }
 
   assert {
@@ -287,6 +343,7 @@ run "cross_region_gpu_and_azd_string_inputs" {
           azapi_resource.node_pool.location,
           azapi_resource.chat_model.location,
           azapi_resource.discovery_storage.location,
+          azapi_resource.bookshelf.location,
           azapi_resource.project.location
         ] : location == "uksouth"
       ]) &&
@@ -300,10 +357,15 @@ run "cross_region_gpu_and_azd_string_inputs" {
           azurerm_public_ip.nat.location
         ] : location == "westus3"
       ]) &&
-      azapi_resource.workspace.tags["discovery.overridemrgregion"] == "westus3" &&
-      azapi_resource.supercomputer.tags["discovery.overridemrgregion"] == "westus3" &&
-      azapi_resource.workspace.tags.SkipAssociateKeyVaultToNsp == "true" &&
-      azapi_resource.supercomputer.tags.SkipAssociateKeyVaultToNsp == "true" &&
+      alltrue([
+        for tags in [
+          azapi_resource.workspace.tags,
+          azapi_resource.supercomputer.tags,
+          azapi_resource.bookshelf.tags
+        ] : tags["discovery.overridemrgregion"] == "westus3" && tags.SkipAssociateKeyVaultToNsp == "true"
+      ]) &&
+      azapi_resource.bookshelf.tags.NetworkIsolation == "false" &&
+      azapi_resource.bookshelf.body.properties.publicNetworkAccess == "Disabled" &&
       azurerm_subnet.discovery["aksSubnet"].address_prefixes == tolist(["10.42.2.0/24"]) &&
       azurerm_subnet.discovery["sc-mgmt"].address_prefixes == tolist(["10.42.7.0/28"])
     )
