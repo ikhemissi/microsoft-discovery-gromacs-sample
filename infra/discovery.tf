@@ -120,6 +120,39 @@ resource "azapi_resource" "discovery_storage" {
   depends_on = [azapi_resource.output_container, azurerm_role_assignment.discovery]
 }
 
+resource "azapi_resource" "bookshelf" {
+  type      = "Microsoft.Discovery/bookshelves@2026-06-01"
+  name      = "bs-${local.resource_suffix}"
+  parent_id = azurerm_resource_group.main.id
+  location  = var.location
+  tags = merge(azurerm_resource_group.main.tags, {
+    version                       = "v2"
+    "discovery.overridemrgregion" = local.data_plane_location
+    NetworkIsolation              = tostring(var.workspace_features.network_isolation)
+    indexSize                     = "small"
+  })
+
+  body = {
+    properties = {
+      customerManagedKeys     = "Disabled"
+      publicNetworkAccess     = var.bookshelf_public_network_access
+      privateEndpointSubnetId = azurerm_subnet.discovery["privateEndpointSubnet"].id
+      searchSubnetId          = azurerm_subnet.discovery["searchSubnet"].id
+      workloadIdentities = {
+        (azurerm_user_assigned_identity.discovery.id) = {}
+      }
+    }
+  }
+
+  timeouts {
+    create = "90m"
+    update = "90m"
+    delete = "90m"
+  }
+
+  depends_on = [azurerm_role_assignment.discovery]
+}
+
 resource "azapi_resource" "project" {
   type      = "Microsoft.Discovery/workspaces/projects@2026-06-01"
   name      = "prj-${local.resource_suffix}"

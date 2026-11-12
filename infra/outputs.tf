@@ -53,6 +53,11 @@ output "DISCOVERY_PROJECT_ID" {
   value       = azapi_resource.project.id
 }
 
+output "DISCOVERY_BOOKSHELF_ID" {
+  description = "Discovery Bookshelf resource ID; knowledge-base creation and indexing are separate operations."
+  value       = azapi_resource.bookshelf.id
+}
+
 output "DISCOVERY_MANAGED_IDENTITY_ID" {
   description = "User-assigned managed identity used by Discovery."
   value       = azurerm_user_assigned_identity.discovery.id

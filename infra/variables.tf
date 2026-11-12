@@ -63,8 +63,8 @@ variable "storage_replication_type" {
   default     = "GRS"
 
   validation {
-    condition     = contains(["ZRS", "GRS", "GZRS", "RAGRS", "RAGZRS"], var.storage_replication_type)
-    error_message = "Use a zone- or geo-redundant storage replication type: ZRS, GRS, GZRS, RAGRS, or RAGZRS."
+    condition     = contains(["LRS", "ZRS", "GRS", "GZRS", "RAGRS", "RAGZRS"], var.storage_replication_type)
+    error_message = "Use a supported storage replication type: LRS, ZRS, GRS, GZRS, RAGRS, or RAGZRS."
   }
 }
 
@@ -117,4 +117,15 @@ variable "workspace_features" {
   })
   description = "Workspace feature tags; public preview workbench access requires network_isolation=false."
   default     = {}
+}
+
+variable "bookshelf_public_network_access" {
+  type        = string
+  description = "Bookshelf data-plane public network access; Disabled requires a client private endpoint for Discovery Studio."
+  default     = "Enabled"
+
+  validation {
+    condition     = contains(["Enabled", "Disabled"], var.bookshelf_public_network_access)
+    error_message = "Use Enabled or Disabled."
+  }
 }
