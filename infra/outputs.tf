@@ -69,6 +69,6 @@ output "DISCOVERY_STORAGE_ACCOUNT_ID" {
 }
 
 output "DISCOVERY_VNET_ID" {
-  description = "Virtual network containing the six Discovery subnets."
+  description = "Virtual network containing the six Discovery subnets and the supercomputer management subnet."
   value       = azurerm_virtual_network.discovery.id
 }

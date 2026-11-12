@@ -3,14 +3,14 @@ resource "azapi_resource" "supercomputer" {
   name      = "sc-${local.resource_suffix}"
   parent_id = azurerm_resource_group.main.id
   location  = var.location
-  tags = merge(azurerm_resource_group.main.tags, {
-    version                       = "v2"
-    "discovery.overridemrgregion" = local.data_plane_location
+  tags = merge(azurerm_resource_group.main.tags, local.mrg_override_tags, {
+    version = "v2"
   })
 
   body = {
     properties = {
-      subnetId = azurerm_subnet.discovery["aksSubnet"].id
+      subnetId           = azurerm_subnet.discovery["aksSubnet"].id
+      managementSubnetId = azurerm_subnet.discovery["sc-mgmt"].id
       identities = {
         clusterIdentity = { id = azurerm_user_assigned_identity.discovery.id }
         kubeletIdentity = { id = azurerm_user_assigned_identity.discovery.id }
@@ -27,7 +27,7 @@ resource "azapi_resource" "supercomputer" {
     delete = "90m"
   }
 
-  depends_on = [azurerm_role_assignment.discovery]
+  depends_on = [azurerm_role_assignment.discovery, azurerm_subnet_nat_gateway_association.discovery]
 }
 
 resource "azapi_resource" "node_pool" {
@@ -59,9 +59,8 @@ resource "azapi_resource" "workspace" {
   name      = "ws-${local.resource_suffix}"
   parent_id = azurerm_resource_group.main.id
   location  = var.location
-  tags = merge(azurerm_resource_group.main.tags, {
+  tags = merge(azurerm_resource_group.main.tags, local.mrg_override_tags, {
     version                                    = "v2"
-    "discovery.overridemrgregion"              = local.data_plane_location
     "discovery.workbench.enableGhcpAiFeatures" = tostring(var.workspace_features.enable_ghcp_ai_features)
     "discovery.workbench.enableExtensions"     = tostring(var.workspace_features.enable_extensions)
     NetworkIsolation                           = tostring(var.workspace_features.network_isolation)
@@ -125,11 +124,10 @@ resource "azapi_resource" "bookshelf" {
   name      = "bs-${local.resource_suffix}"
   parent_id = azurerm_resource_group.main.id
   location  = var.location
-  tags = merge(azurerm_resource_group.main.tags, {
-    version                       = "v2"
-    "discovery.overridemrgregion" = local.data_plane_location
-    NetworkIsolation              = tostring(var.workspace_features.network_isolation)
-    indexSize                     = "small"
+  tags = merge(azurerm_resource_group.main.tags, local.mrg_override_tags, {
+    version          = "v2"
+    NetworkIsolation = tostring(var.workspace_features.network_isolation)
+    indexSize        = "small"
   })
 
   body = {

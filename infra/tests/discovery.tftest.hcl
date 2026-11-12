@@ -4,6 +4,31 @@ mock_provider "azurerm" {
       object_id = "00000000-0000-0000-0000-000000000002"
     }
   }
+
+  # azapi parents and NAT associations validate Azure resource ID formats.
+  mock_resource "azurerm_resource_group" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test"
+    }
+  }
+
+  mock_resource "azurerm_subnet" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/subnet-test"
+    }
+  }
+
+  mock_resource "azurerm_nat_gateway" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Network/natGateways/nat-test"
+    }
+  }
+
+  mock_resource "azurerm_public_ip" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Network/publicIPAddresses/pip-nat-test"
+    }
+  }
 }
 mock_provider "azapi" {}
 
@@ -36,6 +61,8 @@ run "quickstart_defaults" {
         azurerm_resource_group.main.tags,
         azurerm_container_registry.tools.tags,
         azurerm_virtual_network.discovery.tags,
+        azurerm_public_ip.nat.tags,
+        azurerm_nat_gateway.discovery.tags,
         azurerm_user_assigned_identity.discovery.tags,
         azapi_resource.data_storage.tags,
         azapi_resource.supercomputer.tags,
@@ -59,17 +86,19 @@ run "quickstart_defaults" {
       azurerm_container_registry.tools.role_assignment_mode == "LegacyRegistryPermissions" &&
       azurerm_container_registry.tools.location == "uksouth"
     )
-    error_message = "The tools registry must use Basic SKU, authenticated RBAC access, and the data-plane region."
+    error_message = "The tools registry must use Basic SKU, authenticated RBAC access, and the target region."
   }
 
   assert {
     condition = (
-      length(azurerm_subnet.discovery) == 6 &&
+      length(azurerm_subnet.discovery) == 7 &&
       azurerm_subnet.discovery["supercomputerNodepoolSubnet"].address_prefixes == tolist(["10.0.1.0/24"]) &&
       azurerm_subnet.discovery["searchSubnet"].address_prefixes == tolist(["10.0.6.0/24"]) &&
-      length(distinct(flatten([for subnet in azurerm_subnet.discovery : subnet.address_prefixes]))) == 6
+      azurerm_subnet.discovery["sc-mgmt"].address_prefixes == tolist(["10.0.7.0/28"]) &&
+      azurerm_subnet.discovery["sc-mgmt"].delegation[0].service_delegation[0].name == "Microsoft.ContainerService/managedClusters" &&
+      length(distinct(flatten([for subnet in azurerm_subnet.discovery : subnet.address_prefixes]))) == 7
     )
-    error_message = "The network must contain the six distinct quickstart subnets."
+    error_message = "The network must contain the six quickstart subnets and the delegated /28 management subnet."
   }
 
   assert {
@@ -82,14 +111,29 @@ run "quickstart_defaults" {
 
   assert {
     condition = (
-      !azurerm_subnet.discovery["privateEndpointSubnet"].default_outbound_access_enabled &&
+      alltrue([for subnet in azurerm_subnet.discovery : !subnet.default_outbound_access_enabled]) &&
       length(azurerm_subnet.discovery["privateEndpointSubnet"].service_endpoint) == 0 &&
+      length(azurerm_subnet.discovery["sc-mgmt"].service_endpoint) == 0 &&
       alltrue([
         for name, subnet in azurerm_subnet.discovery :
-        one(subnet.service_endpoint).service == "Microsoft.Storage" if name != "privateEndpointSubnet"
+        one(subnet.service_endpoint).service == "Microsoft.Storage" if !contains(["privateEndpointSubnet", "sc-mgmt"], name)
       ])
     )
-    error_message = "Only the five workload subnets must have Storage endpoints; the private endpoint subnet must disable default outbound access."
+    error_message = "Every subnet must disable default outbound access; only the five workload subnets get Storage endpoints."
+  }
+
+  assert {
+    condition = (
+      toset(keys(azurerm_subnet_nat_gateway_association.discovery)) == toset([
+        "supercomputerNodepoolSubnet", "aksSubnet", "workspaceSubnet", "agentSubnet", "searchSubnet"
+      ]) &&
+      azurerm_nat_gateway.discovery.sku_name == "Standard" &&
+      azurerm_public_ip.nat.sku == "Standard" &&
+      azurerm_public_ip.nat.allocation_method == "Static" &&
+      azurerm_nat_gateway.discovery.location == "uksouth" &&
+      azurerm_public_ip.nat.location == "uksouth"
+    )
+    error_message = "Only the five workload subnets must use the NAT gateway for explicit outbound connectivity."
   }
 
   assert {
@@ -142,9 +186,12 @@ run "quickstart_defaults" {
       azapi_resource.workspace.tags["discovery.workbench.enableGhcpAiFeatures"] == "true" &&
       azapi_resource.workspace.tags["discovery.workbench.enableExtensions"] == "true" &&
       azapi_resource.workspace.tags["discovery.overridemrgregion"] == "uksouth" &&
+      azapi_resource.supercomputer.tags["discovery.overridemrgregion"] == "uksouth" &&
+      !contains(keys(azapi_resource.workspace.tags), "SkipAssociateKeyVaultToNsp") &&
+      !contains(keys(azapi_resource.supercomputer.tags), "SkipAssociateKeyVaultToNsp") &&
       azurerm_virtual_network.discovery.location == "uksouth"
     )
-    error_message = "Default compute, model, features, and data-plane region must match the quickstart."
+    error_message = "Default compute, model, features, and single-region placement must match the quickstart."
   }
 }
 
@@ -268,9 +315,10 @@ run "cross_region_gpu_and_azd_string_inputs" {
   command = plan
 
   variables {
-    data_plane_location      = "swedencentral"
-    vnet_address_prefix      = "10.42.0.0/16"
-    storage_replication_type = "ZRS"
+    target_location               = "westus3"
+    skip_keyvault_nsp_association = "true"
+    vnet_address_prefix           = "10.42.0.0/16"
+    storage_replication_type      = "ZRS"
     node_pool = {
       vm_size            = "Standard_NC24ads_A100_v4"
       min_node_count     = "1"
@@ -287,21 +335,41 @@ run "cross_region_gpu_and_azd_string_inputs" {
 
   assert {
     condition = (
-      azapi_resource.workspace.location == "uksouth" &&
-      azapi_resource.supercomputer.location == "uksouth" &&
-      azurerm_container_registry.tools.location == "swedencentral" &&
-      azurerm_virtual_network.discovery.location == "swedencentral" &&
-      azurerm_user_assigned_identity.discovery.location == "swedencentral" &&
-      azapi_resource.data_storage.location == "swedencentral" &&
-      azapi_resource.workspace.tags["discovery.overridemrgregion"] == "swedencentral" &&
-      azapi_resource.supercomputer.tags["discovery.overridemrgregion"] == "swedencentral" &&
-      azapi_resource.bookshelf.location == "uksouth" &&
-      azapi_resource.bookshelf.tags["discovery.overridemrgregion"] == "swedencentral" &&
+      azurerm_resource_group.main.location == "uksouth" &&
+      alltrue([
+        for location in [
+          azapi_resource.workspace.location,
+          azapi_resource.supercomputer.location,
+          azapi_resource.node_pool.location,
+          azapi_resource.chat_model.location,
+          azapi_resource.discovery_storage.location,
+          azapi_resource.bookshelf.location,
+          azapi_resource.project.location
+        ] : location == "uksouth"
+      ]) &&
+      alltrue([
+        for location in [
+          azurerm_container_registry.tools.location,
+          azurerm_virtual_network.discovery.location,
+          azurerm_user_assigned_identity.discovery.location,
+          azapi_resource.data_storage.location,
+          azurerm_nat_gateway.discovery.location,
+          azurerm_public_ip.nat.location
+        ] : location == "westus3"
+      ]) &&
+      alltrue([
+        for tags in [
+          azapi_resource.workspace.tags,
+          azapi_resource.supercomputer.tags,
+          azapi_resource.bookshelf.tags
+        ] : tags["discovery.overridemrgregion"] == "westus3" && tags.SkipAssociateKeyVaultToNsp == "true"
+      ]) &&
       azapi_resource.bookshelf.tags.NetworkIsolation == "false" &&
       azapi_resource.bookshelf.body.properties.publicNetworkAccess == "Disabled" &&
-      azurerm_subnet.discovery["aksSubnet"].address_prefixes == tolist(["10.42.2.0/24"])
+      azurerm_subnet.discovery["aksSubnet"].address_prefixes == tolist(["10.42.2.0/24"]) &&
+      azurerm_subnet.discovery["sc-mgmt"].address_prefixes == tolist(["10.42.7.0/28"])
     )
-    error_message = "The optional data-plane region and network must propagate without moving Discovery control-plane resources."
+    error_message = "Target-region resources must move to the target region while Discovery control-plane resources stay in the home region."
   }
 
   assert {
@@ -319,11 +387,11 @@ run "cross_region_gpu_and_azd_string_inputs" {
   }
 }
 
-run "empty_data_plane_region_uses_primary" {
+run "empty_target_region_uses_home_region" {
   command = plan
 
   variables {
-    data_plane_location           = ""
+    target_location               = ""
     assign_provisioner_data_roles = "false"
   }
 
@@ -336,8 +404,11 @@ run "empty_data_plane_region_uses_primary" {
   }
 
   assert {
-    condition     = azapi_resource.data_storage.location == "uksouth"
-    error_message = "An unset azd data-plane region must fall back to the primary region."
+    condition = (
+      azapi_resource.data_storage.location == "uksouth" &&
+      azapi_resource.workspace.tags["discovery.overridemrgregion"] == "uksouth"
+    )
+    error_message = "An unset azd target region must fall back to the home region."
   }
 }
 
@@ -349,6 +420,46 @@ run "reject_unsupported_region" {
   }
 
   expect_failures = [var.location]
+}
+
+run "reject_target_region_as_home_region" {
+  command = plan
+
+  variables {
+    location = "westus3"
+  }
+
+  expect_failures = [var.location]
+}
+
+run "reject_unsupported_target_region" {
+  command = plan
+
+  variables {
+    target_location = "westus2"
+  }
+
+  expect_failures = [var.target_location]
+}
+
+run "reject_target_region_without_ai_search_features" {
+  command = plan
+
+  variables {
+    target_location = "norwayeast"
+  }
+
+  expect_failures = [var.target_location]
+}
+
+run "reject_display_name_target_region" {
+  command = plan
+
+  variables {
+    target_location = "West US 3"
+  }
+
+  expect_failures = [var.target_location]
 }
 
 run "reject_invalid_node_counts" {
@@ -428,5 +539,51 @@ run "registry_publisher_and_discovery_pull_access" {
       output.AZURE_CONTAINER_REGISTRY_ID == azurerm_container_registry.tools.id
     )
     error_message = "azd must receive the registry name, login server, and resource ID for publishing."
+  }
+}
+
+run "supercomputer_management_subnet" {
+  command   = apply
+  state_key = "supercomputer_management_subnet"
+
+  plan_options {
+    target = [azapi_resource.supercomputer]
+  }
+
+  override_resource {
+    target = azapi_resource.supercomputer
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Discovery/supercomputers/sc-test"
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.data_storage
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Storage/storageAccounts/stgtest"
+    }
+  }
+
+  override_resource {
+    target = azurerm_subnet.discovery["aksSubnet"]
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/aksSubnet"
+    }
+  }
+
+  override_resource {
+    target = azurerm_subnet.discovery["sc-mgmt"]
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-gromacs-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/sc-mgmt"
+    }
+  }
+
+  assert {
+    condition = (
+      endswith(azapi_resource.supercomputer.body.properties.subnetId, "/subnets/aksSubnet") &&
+      endswith(azapi_resource.supercomputer.body.properties.managementSubnetId, "/subnets/sc-mgmt") &&
+      length(azurerm_subnet_nat_gateway_association.discovery) == 5
+    )
+    error_message = "The supercomputer must use the AKS subnet, the sc-mgmt subnet for API Server VNet Integration, and wait for NAT outbound connectivity."
   }
 }
