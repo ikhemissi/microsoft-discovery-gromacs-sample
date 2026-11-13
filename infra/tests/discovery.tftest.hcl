@@ -11,10 +11,9 @@ variables {
   environment_name = "test"
   location         = "uksouth"
   subscription_id  = "00000000-0000-0000-0000-000000000001"
+  resource_tags    = "CostCenter=research, Owner=lab=team-a"
   global_tags = {
-    CostControl     = "Ignore"
-    SecurityControl = "Ignore"
-    Department      = "chemistry"
+    Department = "chemistry"
   }
 }
 
@@ -45,7 +44,7 @@ run "quickstart_defaults" {
         azapi_resource.discovery_storage.tags,
         azapi_resource.bookshelf.tags,
         azapi_resource.project.tags
-      ] : try(tags.CostControl == "Ignore" && tags.SecurityControl == "Ignore" && tags.Department == "chemistry", false)
+      ] : try(tags.CostCenter == "research" && tags.Owner == "lab=team-a" && tags.Department == "chemistry", false)
     ])
     error_message = "Every taggable resource must carry the supplied global tags."
   }
