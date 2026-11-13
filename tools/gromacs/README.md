@@ -129,10 +129,11 @@ podman run --rm --network none --device nvidia.com/gpu=all --cpus 2 --memory 8g 
 
 Docker uses `--gpus all` instead of the Podman CDI device flag. See the
 [NVIDIA Container Toolkit guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/).
+On WSL 2 the Windows NVIDIA driver is enough; replace the CDI flag with
+`--device /dev/dxg -v /usr/lib/wsl:/usr/lib/wsl:ro -e LD_LIBRARY_PATH=/usr/lib/wsl/lib`.
 Review GROMACS LGPL and NVIDIA container redistribution terms before publishing
 images. Preserve image digests; the pinned source does not freeze base images or
-package repositories. GPU execution and CPU/GPU agreement still need validation
-on actual hardware; a small system may not benefit from offloading.
+package repositories. A small system may not benefit from offloading on every GPU.
 
 ## Validation Status
 
@@ -190,7 +191,17 @@ Discovery-managed AKS cluster had been stopped. The other was the tool command
 starting with an environment assignment; the command now starts with `python3`,
 as in Microsoft's GROMACS tool, and the image sets `GROMACS_ACCELERATION`.
 The GPU tool and the full `run` profile remain unverified in Discovery, and
-glycerol comparisons have not been run. No scientific
+glycerol comparisons have not been run.
+
+Also on 2026-11-13, the rebuilt CUDA image ran the `smoke` profile locally on an
+NVIDIA RTX A2000 Laptop GPU (compute capability 8.6) under WSL 2, offline, against
+the v1 bundle. It completed and its run checksums passed. Short-range nonbonded
+forces ran on the GPU, and production reached 41.9 ns/day, compared with 3.9 ns/day
+on two CPU threads. Mean production temperature (300.7 K versus 299.0 K), density
+(1011.5 versus 1012.3 kg/m³), and final backbone RMSD (0.051 versus 0.054 nm) and
+radius of gyration (1.416 versus 1.412 nm) agreed with the CPU run within the
+variation expected between independent 2 ps trajectories. This shows the GPU path
+runs and agrees with CPU; it is not a precision or performance benchmark. No scientific
 convergence or formulation-performance claim follows from the smoke test.
 
 ## Inspect The Results
