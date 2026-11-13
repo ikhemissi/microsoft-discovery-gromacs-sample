@@ -1,8 +1,8 @@
 <div align="center">
 
-# Microsoft Discovery GROMACS Sample
+# Molecular dynamics on Microsoft Discovery, deployed with Terraform and azd
 
-**Deploy Microsoft Discovery with Terraform and azd, then run an educational lysozyme-in-water molecular dynamics workflow with a GROMACS tool, a research agent and a Bookshelf knowledge base.**
+**Provision a complete Microsoft Discovery environment, then run an educational lysozyme-in-water simulation with a GROMACS tool, a research agent and a Bookshelf knowledge base.**
 
 [![IaC: Terraform](https://img.shields.io/badge/IaC-Terraform-623CE4?style=flat-square&logo=terraform)](infra)
 [![Deploy: azd](https://img.shields.io/badge/deploy-azd-0078D4?style=flat-square)](azure.yaml)
