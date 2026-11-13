@@ -190,7 +190,7 @@ Earlier attempts failed before the runner started. One cause was that the
 Discovery-managed AKS cluster had been stopped. The other was the tool command
 starting with an environment assignment; the command now starts with `python3`,
 as in Microsoft's GROMACS tool, and the image sets `GROMACS_ACCELERATION`.
-The GPU tool and the full `run` profile remain unverified in Discovery, and
+The full `run` profile has not been run end to end, and
 glycerol comparisons have not been run.
 
 Also on 2026-11-13, the rebuilt CUDA image ran the `smoke` profile locally on an
@@ -296,7 +296,7 @@ Discovery schema and registration guide, registry permissions, CPU/GPU SKU
 availability and pool costs. Local preparation does not publish images or register
 tools or agents; the separate CPU publication and temporary version-check tool
 validation, followed by CPU tool and agent registration, are recorded above.
-The GPU tool remains unregistered; only the CPU smoke profile has run in Discovery.
+The CPU version was tested both locally and on Azure; the GPU version was tested locally.
 The default Dockerfile targets
 remain local CLI runners; use `--target discovery` for these tool drafts.
 
