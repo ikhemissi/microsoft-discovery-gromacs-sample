@@ -1,0 +1,4 @@
+* text=auto eol=lf
+# Uploaded bundles are checksummed byte for byte.
+experiments/** -text
+knowledge/** -text
