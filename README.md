@@ -8,7 +8,7 @@
 [![Deploy: azd](https://img.shields.io/badge/deploy-azd-0078D4?style=flat-square)](azure.yaml)
 [![azd extension: Discovery](https://img.shields.io/badge/azd%20extension-Discovery%200.4.0-555555?style=flat-square)](https://github.com/ikhemissi/azd-microsoft-discovery)
 
-[**Quick start**](#quick-start) · [**Settings**](#settings) · [**Tests**](#tests) · [**Clean up**](#clean-up)
+[**Quick start**](#quick-start) · [**Documentation**](#documentation) · [**Tests**](#tests) · [**Clean up**](#clean-up)
 
 </div>
 
@@ -23,23 +23,24 @@ network to the agent:
 | --- | --- |
 | **Infrastructure** | Terraform translation of the official [Discovery deployment quickstart](https://github.com/Azure/azure-quickstart-templates/tree/9a286202372ff9a9a4f4465e1ef30d7b0f3650c6/quickstarts/microsoft.discovery/discovery-infra-deployment): network, identity, storage, container registry, workspace, project and chat model |
 | **Supercomputer** | A CPU node pool for simulations and a memory-optimized node pool for indexing, both scaling to zero |
-| **Tool** | [GROMACS](tools/gromacs/README.md) container image, built and registered by azd |
+| **Tool** | [GROMACS](tools/gromacs/README.md) container image (CPU, plus a CUDA variant), built and registered by azd |
 | **Storage assets** | A versioned [simulation protocol](experiments/lysozyme-water/README.md) (hand-written MDP files and structure) attached to conversations and mounted into the tool |
 | **Bookshelf** | Knowledge base indexed from five open-access lysozyme papers in [knowledge/](knowledge/lysozyme-water) |
 | **Agent** | A researcher agent that previews and runs the attached protocol with the GROMACS tool, and cites the knowledge base |
 
-The experiment is an educational baseline, not a validated formulation study.
+The [experiment](docs/experiment.md) is an educational baseline, not a validated formulation study.
 Deployment uses the community [azd Discovery extension](https://github.com/ikhemissi/azd-microsoft-discovery),
 and Terraform state lives in Blob Storage with Entra authentication (no keys or secrets).
 
 | Path | Contents |
 | --- | --- |
 | [infra/](infra) | Terraform for all Azure and Discovery infrastructure |
-| [azure.yaml](azure.yaml) | azd services: `simulation` (tool), `research` (knowledge base), `researcher` (agent) |
-| [tools/gromacs/](tools/gromacs) | Tool images (CPU and GPU), the runner and the [experiment](tools/gromacs/README.md) |
+| [azure.yaml](azure.yaml) | azd services: `simulation` (tool), `research` (knowledge base), `researcher` (agent), and the datasets to upload |
+| [tools/gromacs/](tools/gromacs) | Tool images (CPU and GPU), the runner and its tests |
 | [experiments/](experiments/lysozyme-water) | Versioned simulation protocols: MDP files, structure and checksums |
 | [agents/](agents) | Researcher agent definition |
 | [knowledge/](knowledge/lysozyme-water) | Research papers, [sources and licenses](knowledge/lysozyme-water/sources.txt) |
+| [docs/](docs) | Experiment, Discovery workflow and configuration guides |
 | [scripts/](scripts) | Legacy deployment script, kept for reference only |
 
 ## Quick start
@@ -111,7 +112,9 @@ updates and other platforms.
 
 ### 5. Provision and deploy
 
-Provisioning creates billable resources. Review the preview first.
+Provisioning creates billable resources. Review the preview first; optional
+settings such as region, VM sizes and node counts are in
+[docs/configuration.md](docs/configuration.md).
 
 ```bash
 export AZD_CONTAINER_RUNTIME=podman   # only if using Podman instead of Docker
@@ -157,65 +160,51 @@ project, and ask the researcher agent, for example:
 
 The agent should search the knowledge base and cite the papers.
 
+![The researcher agent listing the stability measures used in the knowledge base papers, with citations, and those the runner produces](docs/screenshots/knowledge-base-answer.png)
+
 To run a simulation, start a conversation with the agent, attach the
 `lysozyme-protocol-v1` storage asset, and ask:
 
 > Run the attached lysozyme-in-water protocol as a technical smoke test with the
 > default seed. Show me the protocol version and its stage parameters first.
 
+![The agent's preview of protocol v1 with the parameters of each stage](docs/screenshots/protocol-preview.png)
+
 The agent reads the MDP files, summarizes the protocol and asks for
-confirmation before submitting the billable job. The smoke profile takes a few
-minutes on the CPU node pool and is a technical check, not a scientific result.
+confirmation before submitting the billable job. The smoke profile took 3.5
+minutes on the CPU node pool in our test and is a technical check, not a
+scientific result. Ask for the full `run` profile to run the protocol as written
+(42 minutes):
 
-## Settings
+![Backbone RMSD, radius of gyration, temperature and density over 100 ps of production](docs/production-analysis.svg)
 
-Optional overrides, set with `azd env set NAME VALUE` before `azd provision`:
+See [the results](docs/experiment.md#results) and [Run in Discovery](docs/run-in-discovery.md)
+for what to check afterwards and for troubleshooting.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `DISCOVERY_DATA_PLANE_LOCATION` | `AZURE_LOCATION` | Region for networking, identity, storage and Discovery-managed resources |
-| `DISCOVERY_VNET_ADDRESS_PREFIX` | `10.0.0.0/16` | IPv4 /16; six /24 subnets are allocated |
-| `DISCOVERY_STORAGE_REPLICATION` | `GRS` | `LRS`, `ZRS`, `GRS`, `GZRS`, `RAGRS` or `RAGZRS` |
-| `DISCOVERY_VM_SIZE` | `Standard_D4s_v6` | Simulation node pool VM size (CPU) |
-| `DISCOVERY_MIN_NODES` / `DISCOVERY_MAX_NODES` | `0` / `3` | Simulation node pool size |
-| `DISCOVERY_NODE_PRIORITY` | `Regular` | `Regular` or `Spot` |
-| `DISCOVERY_INDEX_VM_SIZE` | `Standard_E20s_v6` | Indexing node pool VM size (memory-optimized) |
-| `DISCOVERY_INDEX_MIN_NODES` / `DISCOVERY_INDEX_MAX_NODES` | `0` / `1` | Indexing node pool size |
-| `DISCOVERY_CHAT_MODEL` / `DISCOVERY_CHAT_DEPLOYMENT` | `gpt-5.4` / `gpt-5-4` | Chat model and deployment name |
-| `DISCOVERY_BOOKSHELF_PUBLIC_ACCESS` | `Enabled` | `Disabled` blocks Discovery Studio unless you add a private endpoint |
-| `DISCOVERY_NETWORK_ISOLATION` | `true` | Workspace isolation tag |
-| `DISCOVERY_ENABLE_GHCP_AI` / `DISCOVERY_ENABLE_EXTENSIONS` | `true` / `true` | Workbench feature tags (GitHub Copilot and AI features are in preview) |
-| `DISCOVERY_ASSIGN_PROVISIONER_DATA_ROLES` | `false` | Grant your account Discovery and outputs-container data access (see below) |
+## Documentation
 
-Tags for all resources are set with `global_tags` in [infra/main.tfvars.json](infra/main.tfvars.json).
-Discovery tags are immutable, so changing them can recreate resources, and
-changing the region of an existing environment can too; always check the preview.
-
-**Provisioner data roles:** with `DISCOVERY_ASSIGN_PROVISIONER_DATA_ROLES=true`,
-Terraform grants the provisioning account **Microsoft Discovery Platform
-Contributor** on the resource group and **Storage Blob Data Contributor** on the
-`discoveryoutputs` container. If these grants already exist, import them into
-`azurerm_role_assignment.provisioner["discovery_platform_contributor"]` and
-`azurerm_role_assignment.provisioner["storage_blob_data_contributor"]` first.
-Setting the flag back to `false` removes them.
-
-**Permissions:** Terraform grants the provisioning account **AcrPush** on the
-registry (to publish the tool image) and **Storage Blob Data Contributor** on
-the papers container (to upload them). The Discovery identity pulls images and
-reads the papers through Terraform-managed grants. The extension never grants
-roles, scales compute or runs simulations.
+| Guide | Read it to |
+| --- | --- |
+| [The experiment](docs/experiment.md) | Understand the scientific question, assumptions and limits, and the glycerol follow-up |
+| [Simulation protocols](experiments/lysozyme-water/README.md) | See how the MDP files are written, reviewed and versioned, and publish a new version |
+| [GROMACS tool](tools/gromacs/README.md) | Build the images, run locally on CPU or GPU, read the outputs, and see what was validated |
+| [Run in Discovery](docs/run-in-discovery.md) | Understand the deployed tool and agent, run a simulation and troubleshoot |
+| [Configuration](docs/configuration.md) | Change regions, VM sizes, node counts and permissions |
 
 ## Tests
 
-Mocked tests check configuration without Azure credentials or deployments:
+Offline tests need no Azure credentials:
 
 ```bash
 terraform -chdir=infra init -backend=false
 terraform -chdir=infra fmt -check -recursive
 terraform -chdir=infra validate
 terraform -chdir=infra test
-azd discovery plan --output json   # after provisioning
+bash tools/gromacs/test.sh experiments/lysozyme-water/v1   # runner safeguards, mocked GROMACS
 ```
+
+After provisioning, `azd discovery plan --output json` compares the
+configuration with the deployed environment.
 
 ## Clean up
 
@@ -229,8 +218,8 @@ The Terraform state storage is not deleted; remove it when no environment uses i
 
 ## Learn more
 
-- [GROMACS experiment](tools/gromacs/README.md)
 - [azd Discovery extension](https://github.com/ikhemissi/azd-microsoft-discovery)
 - [Microsoft Discovery documentation](https://learn.microsoft.com/azure/microsoft-discovery/)
+- [Microsoft's Discovery agents and tools, including GROMACS](https://github.com/microsoft/discovery)
 - [Bookshelf and knowledge bases](https://learn.microsoft.com/azure/microsoft-discovery/concept-bookshelf-knowledge-bases)
 - [Use Terraform with azd](https://learn.microsoft.com/azure/developer/azure-developer-cli/use-terraform-for-azd)
