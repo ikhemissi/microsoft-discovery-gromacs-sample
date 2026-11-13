@@ -430,3 +430,51 @@ run "registry_publisher_and_discovery_pull_access" {
     error_message = "azd must receive the registry name, login server, and resource ID for publishing."
   }
 }
+
+run "knowledge_base_infrastructure_with_azd_string_inputs" {
+  command = plan
+
+  variables {
+    index_node_pool = {
+      min_node_count = "1"
+      max_node_count = "1"
+    }
+  }
+
+  assert {
+    condition = (
+      azapi_resource.knowledge_container.name == "bookshelf-docs" &&
+      azapi_resource.knowledge_container.body.properties.publicAccess == "None" &&
+      azapi_resource.knowledge_asset.name == "lysozyme-water-v1" &&
+      azapi_resource.knowledge_asset.location == "uksouth" &&
+      azapi_resource.knowledge_asset.body.properties.path == "bookshelf-docs/research/lysozyme-water/v1/" &&
+      azurerm_role_assignment.knowledge_uploader.principal_id == "00000000-0000-0000-0000-000000000002" &&
+      endswith(azurerm_role_assignment.knowledge_uploader.role_definition_id, "/ba92f5b4-2d11-453d-a403-e96b0029c9fe")
+    )
+    error_message = "Knowledge documents need a private container, a matching storage asset and container-scoped upload access."
+  }
+
+  assert {
+    condition = (
+      azapi_resource.index_node_pool.name == "indexpool" &&
+      azapi_resource.index_node_pool.body.properties.vmSize == "Standard_E20s_v6" &&
+      azapi_resource.index_node_pool.body.properties.minNodeCount == 1 &&
+      azapi_resource.index_node_pool.body.properties.maxNodeCount == 1 &&
+      azapi_resource.index_node_pool.body.properties.scaleSetPriority == "Regular"
+    )
+    error_message = "The indexing pool must default to the smallest memory-optimized SKU and accept azd string counts."
+  }
+}
+
+run "reject_invalid_index_node_counts" {
+  command = plan
+
+  variables {
+    index_node_pool = {
+      min_node_count = 2
+      max_node_count = 1
+    }
+  }
+
+  expect_failures = [var.index_node_pool]
+}
