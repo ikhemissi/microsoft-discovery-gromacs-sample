@@ -171,10 +171,11 @@ To run a simulation, start a conversation with the agent, attach the
 ![The agent's preview of protocol v1 with the parameters of each stage](docs/screenshots/protocol-preview.png)
 
 The agent reads the MDP files, summarizes the protocol and asks for
-confirmation before submitting the billable job. The smoke profile took 3.5
-minutes on the CPU node pool in our test and is a technical check, not a
-scientific result. Ask for the full `run` profile to run the protocol as written
-(42 minutes):
+confirmation before submitting the billable job. On the default simulation node
+pool (`Standard_D4s_v6`, 4 vCPUs, with the tool using 2 CPU threads), the smoke
+profile took 3.5 minutes; it is a technical check, not a scientific result. Ask
+for the full `run` profile to run the protocol as written; on the same node it
+took 42 minutes:
 
 ![Backbone RMSD, radius of gyration, temperature and density over 100 ps of production](docs/production-analysis.svg)
 

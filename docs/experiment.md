@@ -37,7 +37,7 @@ stop the workflow rather than trigger silent changes to the scientific protocol.
 ## Results
 
 The researcher agent ran protocol v1 as written (`run` profile, seed `20261008`)
-on a `Standard_D4s_v6` node in Microsoft Discovery. It completed in 42 minutes and
+on a `Standard_D4s_v6` node (4 vCPUs, 2 CPU threads used) in Microsoft Discovery. It completed in 42 minutes and
 all checksums passed. Over the 100 ps unrestrained production:
 
 ![Backbone RMSD, radius of gyration, temperature and density over 100 ps of production](production-analysis.svg)

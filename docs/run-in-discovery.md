@@ -84,8 +84,8 @@ searches it to put results in context and cites the papers it uses.
    ![The agent's run plan: protocol version, profile, seed, threads, input and output](screenshots/run-plan.png)
 
 4. Review the generated script in the permission prompt, then select **Proceed**.
-   The smoke profile took 3.5 minutes on a `Standard_D4s_v6` node in our test; the
-   full `run` profile took 42 minutes.
+   On a `Standard_D4s_v6` node (4 vCPUs, with the tool using 2 CPU threads), the
+   smoke profile took 3.5 minutes and the full `run` profile 42 minutes.
 
    ![Discovery's permission prompt showing the tool, the generated script and Proceed and Deny buttons](screenshots/confirm-run.png)
 5. Check `run-status.txt` and the stage logs before asking for interpretation.
