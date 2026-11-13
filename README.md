@@ -223,3 +223,10 @@ The Terraform state storage is not deleted; remove it when no environment uses i
 - [Microsoft's Discovery agents and tools, including GROMACS](https://github.com/microsoft/discovery)
 - [Bookshelf and knowledge bases](https://learn.microsoft.com/azure/microsoft-discovery/concept-bookshelf-knowledge-bases)
 - [Use Terraform with azd](https://learn.microsoft.com/azure/developer/azure-developer-cli/use-terraform-for-azd)
+
+## License
+
+The code and documentation are under the [MIT License](LICENSE). Third-party
+content keeps its own license: the research papers in [knowledge/](knowledge/lysozyme-water/sources.txt)
+are CC BY 4.0, GROMACS (installed in the tool images) is LGPL 2.1 or later, and
+the 1AKI structure from the [Protein Data Bank](https://www.rcsb.org/structure/1AKI) is CC0 1.0.
