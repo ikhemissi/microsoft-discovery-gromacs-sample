@@ -1,3 +1,14 @@
+variable "resource_tags" {
+  type        = string
+  description = "Extra tags on every taggable resource, as comma-separated key=value pairs (azd's RESOURCE_TAGS), e.g. tags your tenant's policies require. Empty: none."
+  default     = ""
+
+  validation {
+    condition     = alltrue([for pair in split(",", var.resource_tags) : trimspace(pair) == "" || can(regex("^[^=]+=.*$", trimspace(pair)))])
+    error_message = "resource_tags must be comma-separated key=value pairs."
+  }
+}
+
 variable "global_tags" {
   type        = map(string)
   description = "Tags applied to every taggable project resource; required project and service tags take precedence."

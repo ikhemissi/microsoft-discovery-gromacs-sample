@@ -18,7 +18,10 @@ Optional overrides, set with `azd env set NAME VALUE` before `azd provision`:
 | `DISCOVERY_ENABLE_GHCP_AI` / `DISCOVERY_ENABLE_EXTENSIONS` | `true` / `true` | Workbench feature tags (GitHub Copilot and AI features are in preview) |
 | `DISCOVERY_ASSIGN_PROVISIONER_DATA_ROLES` | `false` | Grant your account Discovery and outputs-container data access (see below) |
 
-Tags for all resources are set with `global_tags` in [infra/main.tfvars.json](../infra/main.tfvars.json).
+Tags for all resources come from azd's `RESOURCE_TAGS` value, for example tags your tenant's policies require:
+`azd env set RESOURCE_TAGS "key=value,key=value"`. Set it before the first `azd provision` and keep it
+the same afterwards. Fixed tags for every environment can also go in `global_tags` in
+[infra/main.tfvars.json](../infra/main.tfvars.json).
 Discovery tags are immutable, so changing them can recreate resources, and
 changing the region of an existing environment can too; always check the preview.
 
