@@ -1,0 +1,71 @@
+Lysozyme in water: research overview for this sample
+=====================================================
+
+This overview was written for the Microsoft Discovery GROMACS sample. It
+introduces the research topic and points to the open-access papers in this
+folder. It is educational context, not a literature review or validated
+scientific guidance.
+
+1. The protein
+--------------
+
+Hen egg-white lysozyme (HEWL) is a small, well-characterized enzyme of 129
+amino acids with four disulfide bonds. It is one of the most studied model
+proteins in structural biology and biophysics, with many crystal structures,
+NMR measurements and simulation studies available. This sample uses the public
+PDB entry 1AKI (chain A) as its starting structure.
+
+2. Why water matters
+--------------------
+
+Proteins in solution are surrounded by a hydration layer of water molecules
+that interact with the protein surface through hydrogen bonds and
+electrostatics. Water screens charges, stabilizes the folded structure and
+takes part in conformational changes. Removing water, or modelling it only
+implicitly, can change the protein's shape and dynamics. Several papers in this
+folder study these effects directly:
+
+- Explicit water versus no water or implicit solvation in simulations of HEWL
+  (Pechlaner et al., 2022).
+- How the amount of water changes whether thermal unfolding of lysozyme is
+  reversible (Phan-Xuan et al., 2021).
+- How external electric fields affect the dipoles of lysozyme and its
+  hydration layer (Wu et al., 2022).
+
+3. Molecular dynamics of lysozyme
+---------------------------------
+
+Molecular dynamics (MD) simulations calculate how atoms move over time using a
+force field. For lysozyme in water, MD is used to study its flexibility, its
+conformational substates and how it unfolds under stress:
+
+- Long simulations in explicit solvent show how lysozyme explores its
+  conformations over time scales from nanoseconds to microseconds
+  (Wang et al., 2015).
+- Simulations at high temperature and low pH show faster unfolding and the
+  early formation of beta strands linked to amyloid aggregation
+  (Zein et al., 2022).
+
+4. How this sample studies it
+-----------------------------
+
+The sample's GROMACS tool runs a short, educational simulation of lysozyme in
+water: OPLS-AA protein parameters, SPC/E water, neutralizing ions, a
+dodecahedron box, energy minimization, 100 ps equilibration at constant volume
+then constant pressure, and 100 ps of production at 300 K and 1 bar. It reports
+the backbone RMSD, the radius of gyration and thermodynamic properties. These
+runs are far too short to establish equilibrium or support formulation
+conclusions; they demonstrate the workflow.
+
+Useful questions to explore with this knowledge base:
+
+- Why is explicit water important when simulating lysozyme?
+- How does hydration affect lysozyme's stability and unfolding?
+- What time scales are needed to observe lysozyme's conformational changes?
+- Which conditions promote lysozyme unfolding or aggregation?
+
+5. Sources
+----------
+
+See sources.txt in this folder for full citations, DOIs and licenses of the
+papers.

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "files": [
+    {
+      "path": "lysozyme-water-overview.txt",
+      "size": 3113,
+      "sha256": "9d49e3b3d19b6f81d50e4eec1b080b749ddfee145dbfff75c54d92bd3ca34812"
+    },
+    {
+      "path": "pechlaner-2022-hen-lysozyme-solvent-md.pdf",
+      "size": 2220050,
+      "sha256": "dbbe1ad0eb1107b8b0e4198df96bba14f8b4770efc9689d4078577bb238cd446"
+    },
+    {
+      "path": "phan-xuan-2021-lysozyme-water-denaturation.pdf",
+      "size": 6551369,
+      "sha256": "cd5ab577d7007f07db3e767fd037d73a3cba0fb3d9922a5e861a77935c14f6c0"
+    },
+    {
+      "path": "sources.txt",
+      "size": 2499,
+      "sha256": "fea09f8a3902fe867cb49dbb2882f71474d65d2eab7576a4c13984f4c25a0406"
+    },
+    {
+      "path": "wang-2015-lysozyme-submillisecond-md.pdf",
+      "size": 1702562,
+      "sha256": "9bcec31ffee8e1be17d7628044ca1c6a0e377c622c117a39327de29461896c50"
+    },
+    {
+      "path": "wu-2022-hydrated-lysozyme-electric-field-md.pdf",
+      "size": 2510936,
+      "sha256": "903c4a7e4b2e5c04dca4b92d31f92f23702ab2833d119ac178b1462690751793"
+    },
+    {
+      "path": "zein-2022-lysozyme-low-ph-unfolding-md.pdf",
+      "size": 2874607,
+      "sha256": "3f67e91a6ad7dc57f83be0adfdbee18960fcb0f9985ee6d317c0142518618b18"
+    }
+  ]
+}

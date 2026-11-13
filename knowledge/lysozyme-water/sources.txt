@@ -1,0 +1,52 @@
+Sources and licenses
+====================
+
+The PDF files in this folder are unmodified copies of open-access articles,
+redistributed under the Creative Commons Attribution 4.0 International license
+(CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
+
+Each license was verified in the article's own license statement. The files
+were obtained from the publisher (PLOS) or from the PubMed Central open-access
+dataset (https://registry.opendata.aws/ncbi-pmc/), whose checksums were
+verified. Copyright remains with the authors. Inclusion here does not imply
+endorsement by the authors or publishers.
+
+lysozyme-water-overview.txt and this file were written for this sample.
+
+pechlaner-2022-hen-lysozyme-solvent-md.pdf
+  Pechlaner M, van Gunsteren WF, Hansen N, Smith LJ. Molecular dynamics
+  simulation or structure refinement of proteins: are solvent molecules
+  required? A case study using hen lysozyme. European Biophysics Journal.
+  2022;51(3):265-282. https://doi.org/10.1007/s00249-022-01593-1 (PMC9035012)
+  License: CC BY 4.0
+
+phan-xuan-2021-lysozyme-water-denaturation.pdf
+  Phan-Xuan T, Bogdanova E, Sommertune J, Fureby AM, Fransson J, Terry AE,
+  Kocherbitov V. The role of water in the reversibility of thermal
+  denaturation of lysozyme in solid and liquid states. Biochemistry and
+  Biophysics Reports. 2021;28:101184.
+  https://doi.org/10.1016/j.bbrep.2021.101184 (PMC8665301)
+  License: CC BY 4.0
+
+wang-2015-lysozyme-submillisecond-md.pdf
+  Wang K, Long S, Tian P. Hierarchical Conformational Analysis of Native
+  Lysozyme Based on Sub-Millisecond Molecular Dynamics Simulations. PLoS ONE.
+  2015;10(6):e0129846. https://doi.org/10.1371/journal.pone.0129846
+  (PMC4461368)
+  License: CC BY 4.0
+
+wu-2022-hydrated-lysozyme-electric-field-md.pdf
+  Wu H, Ghaani MR, Nandi PK, English NJ. Investigation of Dipolar Response of
+  the Hydrated Hen-Egg White Lysozyme Complex under Externally Applied
+  Electric Fields: Insights from Non-equilibrium Molecular Dynamics. The
+  Journal of Physical Chemistry B. 2022;126(4):858-868.
+  https://doi.org/10.1021/acs.jpcb.1c07096 (PMC8819654)
+  License: CC BY 4.0
+
+zein-2022-lysozyme-low-ph-unfolding-md.pdf
+  Zein HF, Alam I, Asanithi P, Sutthibutpong T. Molecular dynamics study on
+  the effects of charged amino acid distribution under low pH condition to
+  the unfolding of hen egg white lysozyme and formation of beta strands.
+  PLoS ONE. 2022;17(3):e0249742.
+  https://doi.org/10.1371/journal.pone.0249742 (PMC8946743)
+  License: CC BY 4.0
