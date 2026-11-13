@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="920" height="460" viewBox="0 0 920 460" role="img" aria-labelledby="title desc" font-family="Segoe UI, Helvetica, Arial, sans-serif">
-  <title id="title">Microsoft Discovery GROMACS sample architecture</title>
+  <title id="title">Molecular dynamics on Microsoft Discovery: architecture</title>
   <desc id="desc">This repository provisions Microsoft Discovery with Terraform and deploys a GROMACS tool, a Bookshelf knowledge base and a researcher agent with azd. The agent runs simulations with the tool and cites papers from the knowledge base. Both run on supercomputer node pools and use Discovery storage.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
