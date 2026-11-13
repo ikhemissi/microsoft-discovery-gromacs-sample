@@ -6,7 +6,7 @@
 
 [![IaC: Terraform](https://img.shields.io/badge/IaC-Terraform-623CE4?style=flat-square&logo=terraform)](infra)
 [![Deploy: azd](https://img.shields.io/badge/deploy-azd-0078D4?style=flat-square)](azure.yaml)
-[![azd extension: Discovery](https://img.shields.io/badge/azd%20extension-Discovery%200.4.0-555555?style=flat-square)](https://github.com/ikhemissi/azd-microsoft-discovery)
+[![azd extension: Discovery](https://img.shields.io/badge/azd%20extension-Discovery%200.5.0-555555?style=flat-square)](https://github.com/ikhemissi/azd-microsoft-discovery)
 
 [**Quick start**](#quick-start) · [**Documentation**](#documentation) · [**Tests**](#tests) · [**Clean up**](#clean-up)
 
@@ -100,7 +100,7 @@ must allow your machine.
 ### 4. Install the azd Discovery extension
 
 ```bash
-VERSION=0.4.0
+VERSION=0.5.0
 azd extension install \
 	"https://github.com/ikhemissi/azd-microsoft-discovery/releases/download/v${VERSION}/ikhemissi-azd-discovery_${VERSION}.zip"
 azd discovery version
