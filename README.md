@@ -24,8 +24,9 @@ network to the agent:
 | **Infrastructure** | Terraform translation of the official [Discovery deployment quickstart](https://github.com/Azure/azure-quickstart-templates/tree/9a286202372ff9a9a4f4465e1ef30d7b0f3650c6/quickstarts/microsoft.discovery/discovery-infra-deployment): network, identity, storage, container registry, workspace, project and chat model |
 | **Supercomputer** | A CPU node pool for simulations and a memory-optimized node pool for indexing, both scaling to zero |
 | **Tool** | [GROMACS](tools/gromacs/README.md) container image, built and registered by azd |
+| **Storage assets** | A versioned [simulation protocol](experiments/lysozyme-water/README.md) (hand-written MDP files and structure) attached to conversations and mounted into the tool |
 | **Bookshelf** | Knowledge base indexed from five open-access lysozyme papers in [knowledge/](knowledge/lysozyme-water) |
-| **Agent** | A researcher agent that runs the GROMACS tool and cites the knowledge base |
+| **Agent** | A researcher agent that previews and runs the attached protocol with the GROMACS tool, and cites the knowledge base |
 
 The experiment is an educational baseline, not a validated formulation study.
 Deployment uses the community [azd Discovery extension](https://github.com/ikhemissi/azd-microsoft-discovery),
@@ -35,7 +36,8 @@ and Terraform state lives in Blob Storage with Entra authentication (no keys or 
 | --- | --- |
 | [infra/](infra) | Terraform for all Azure and Discovery infrastructure |
 | [azure.yaml](azure.yaml) | azd services: `simulation` (tool), `research` (knowledge base), `researcher` (agent) |
-| [tools/gromacs/](tools/gromacs) | Tool images (CPU and GPU), simulation inputs and the [experiment](tools/gromacs/README.md) |
+| [tools/gromacs/](tools/gromacs) | Tool images (CPU and GPU), the runner and the [experiment](tools/gromacs/README.md) |
+| [experiments/](experiments/lysozyme-water) | Versioned simulation protocols: MDP files, structure and checksums |
 | [agents/](agents) | Researcher agent definition |
 | [knowledge/](knowledge/lysozyme-water) | Research papers, [sources and licenses](knowledge/lysozyme-water/sources.txt) |
 | [scripts/](scripts) | Legacy deployment script, kept for reference only |
@@ -135,6 +137,10 @@ azd env set DISCOVERY_INDEX_MIN_NODES 0 && azd provision
 
 # Agent, with the tool and knowledge base attached
 azd deploy researcher
+
+# Simulation protocol, attached to conversations that run simulations
+azd discovery data upload lysozyme-water-protocol --dry-run
+azd discovery data upload lysozyme-water-protocol --confirm
 ```
 
 After the first indexing, `azd deploy --all` (or `azd up`) redeploys everything.
@@ -149,8 +155,17 @@ project, and ask the researcher agent, for example:
 > MD studies of hen egg-white lysozyme in water use to assess stability, and
 > which does this sample's runner produce? Cite the papers.
 
-The agent should search the knowledge base and cite the papers. Simulations
-are billable and the agent asks for confirmation before submitting one.
+The agent should search the knowledge base and cite the papers.
+
+To run a simulation, start a conversation with the agent, attach the
+`lysozyme-protocol-v1` storage asset, and ask:
+
+> Run the attached lysozyme-in-water protocol as a technical smoke test with the
+> default seed. Show me the protocol version and its stage parameters first.
+
+The agent reads the MDP files, summarizes the protocol and asks for
+confirmation before submitting the billable job. The smoke profile takes a few
+minutes on the CPU node pool and is a technical check, not a scientific result.
 
 ## Settings
 

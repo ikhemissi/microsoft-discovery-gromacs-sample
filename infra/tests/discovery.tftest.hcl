@@ -431,6 +431,22 @@ run "registry_publisher_and_discovery_pull_access" {
   }
 }
 
+run "simulation_protocol_storage" {
+  command = plan
+
+  assert {
+    condition = (
+      azapi_resource.protocol_container.name == "simulation-protocols" &&
+      azapi_resource.protocol_container.body.properties.publicAccess == "None" &&
+      azapi_resource.protocol_asset.name == "lysozyme-protocol-v1" &&
+      azapi_resource.protocol_asset.body.properties.path == "simulation-protocols/experiments/lysozyme-water/v1/" &&
+      azurerm_role_assignment.protocol_uploader.principal_id == "00000000-0000-0000-0000-000000000002" &&
+      endswith(azurerm_role_assignment.protocol_uploader.role_definition_id, "/ba92f5b4-2d11-453d-a403-e96b0029c9fe")
+    )
+    error_message = "Protocol bundles need a private container, a matching storage asset and container-scoped upload access."
+  }
+}
+
 run "knowledge_base_infrastructure_with_azd_string_inputs" {
   command = plan
 

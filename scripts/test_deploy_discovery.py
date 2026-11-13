@@ -173,6 +173,8 @@ class DiscoveryDeploymentTests(unittest.TestCase):
         self.assertEqual(configuration["services"]["simulation"]["project"], "./tools/gromacs")
         self.assertEqual(configuration["services"]["researcher"]["project"], "./agents/lysozyme-water-gromacs")
         for service in configuration["services"].values():
+            if "project" not in service:
+                continue
             definition = deployment.ROOT / service["project"] / service["config"]["definition"]
             self.assertTrue(definition.is_file())
 

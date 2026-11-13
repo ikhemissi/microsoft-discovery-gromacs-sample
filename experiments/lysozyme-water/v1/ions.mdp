@@ -1,0 +1,10 @@
+; Lysozyme in water, protocol v1: ion-placement input (no dynamics).
+; gmx genion needs a run input file only to know the system; nothing is
+; simulated, so plain cut-off electrostatics are enough here.
+integrator = steep
+nsteps = 0
+cutoff-scheme = Verlet
+coulombtype = Cut-off
+rcoulomb = 1.0
+rvdw = 1.0
+pbc = xyz

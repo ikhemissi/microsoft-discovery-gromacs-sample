@@ -1,0 +1,38 @@
+; Lysozyme in water, protocol v1: temperature equilibration (NVT).
+; Protein heavy atoms are restrained so the water relaxes around them.
+define = -DPOSRES
+integrator = md
+; 2 fs time step; requires bond constraints below.
+dt = 0.002
+; 50,000 x 2 fs = 100 ps (the smoke profile shortens this to 2 ps).
+nsteps = 50000
+continuation = no
+constraints = all-bonds
+constraint_algorithm = lincs
+lincs_iter = 1
+lincs_order = 4
+cutoff-scheme = Verlet
+nstlist = 20
+coulombtype = PME
+rcoulomb = 1.0
+rvdw = 1.0
+pbc = xyz
+DispCorr = EnerPres
+; Stochastic velocity-rescaling thermostat at 300 K.
+tcoupl = V-rescale
+tc-grps = System
+tau_t = 0.1
+ref_t = 300
+; Fixed volume.
+pcoupl = no
+; Start from random velocities at 300 K; the runner sets gen_seed per run.
+gen_vel = yes
+gen_temp = 300
+gen_seed = 20261008
+; Energies, log and compressed coordinates every 500 steps (1 ps).
+nstenergy = 500
+nstlog = 500
+nstxout-compressed = 500
+nstxout = 0
+nstvout = 0
+nstfout = 0

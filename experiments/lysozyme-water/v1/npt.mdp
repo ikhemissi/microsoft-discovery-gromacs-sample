@@ -1,7 +1,11 @@
+; Lysozyme in water, protocol v1: pressure equilibration (NPT).
+; Restraints stay on while the box density adjusts at 1 bar.
 define = -DPOSRES
 integrator = md
 dt = 0.002
+; 100 ps (2 ps in the smoke profile).
 nsteps = 50000
+; Continue from the NVT state and velocities.
 continuation = yes
 constraints = all-bonds
 constraint_algorithm = lincs
@@ -18,11 +22,13 @@ tcoupl = V-rescale
 tc-grps = System
 tau_t = 0.1
 ref_t = 300
+; Stochastic cell-rescaling barostat at 1 bar; water compressibility in 1/bar.
 pcoupl = C-rescale
 pcoupltype = isotropic
 tau_p = 5.0
 ref_p = 1.0
 compressibility = 4.5e-5
+; Scale restraint reference positions with the box.
 refcoord_scaling = com
 gen_vel = no
 nstenergy = 500

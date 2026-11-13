@@ -37,22 +37,25 @@ stop the workflow rather than trigger silent changes to the scientific protocol.
 
 ## Prepare The Data
 
-Run from the repository root. Preparation requires Bash, curl, awk and sha256sum.
-It downloads the public structure, checks its pinned fingerprint, and records
-source, retrieval time and input checksums. It does not execute downloaded code.
+The simulation protocol is data, not part of the tool. The reviewed protocol
+bundle lives in [experiments/lysozyme-water/v1](../../experiments/lysozyme-water/v1):
+five hand-written MDP files, the prepared structure, provenance and checksums.
+See [experiments/lysozyme-water](../../experiments/lysozyme-water/README.md) for
+how each parameter was chosen and how to publish a new protocol version.
+
+The bundle is committed and ready to use. To build a new version, copy the five
+MDP files into a new directory (for example `v2`), edit them, then add the
+structure, provenance and checksums. This requires Bash, curl, awk and sha256sum;
+it downloads the public structure and checks its pinned fingerprint:
 
 ```bash
-bash tools/gromacs/run.sh prepare tools/gromacs/input
-bash tools/gromacs/test.sh tools/gromacs/input
+bash tools/gromacs/run.sh prepare experiments/lysozyme-water/v2
+bash tools/gromacs/test.sh experiments/lysozyme-water/v2
 ```
 
-The destination must not already exist. Keep an existing verified bundle for
-reproducibility; use a new directory when preparing a different protocol version.
-After changing the runner, prepare a fresh bundle in a new directory and use that
-bundle in the commands below. Do not overwrite the old checksummed runner.
-The generated input and result directories are git-ignored. The bundle contains
-the original PDB, selected protein, five parameter files, runner and provenance.
-If RCSB updates the source file, inspect that change before updating the pinned hash.
+`prepare` refuses to overwrite an existing structure or checksum file, so a
+published version stays immutable. If RCSB updates the source file, inspect that
+change before updating the pinned hash.
 
 ## Run Locally
 
@@ -68,12 +71,12 @@ an equilibrated system or useful scientific sampling.
 podman build -t localhost/discovery-lysozyme:baseline tools/gromacs
 mkdir -p tools/gromacs/results
 podman run --rm --network none --cpus 2 --memory 2g \
-  -v "$PWD/tools/gromacs/input:/input:ro" \
+  -v "$PWD/experiments/lysozyme-water/v1:/input:ro" \
   -v "$PWD/tools/gromacs/results:/output" \
   localhost/discovery-lysozyme:baseline smoke /input /output/smoke-01 20261008 2
 ```
 
-For the 100 ps-per-stage baseline, replace `smoke` with `run` and use a new
+For the protocol's full 100 ps-per-stage durations, replace `smoke` with `run` and use a new
 output name such as `/output/baseline-01`. CPU execution may take substantially
 longer than an interactive demonstration; measure before promising a live run.
 
@@ -81,7 +84,7 @@ Alternatively, with GROMACS 2024+ (thread-MPI) available as `gmx`:
 
 ```bash
 bash tools/gromacs/run.sh smoke \
-  tools/gromacs/input \
+  experiments/lysozyme-water/v1 \
   tools/gromacs/results/smoke-01 20261008 2
 ```
 
@@ -119,7 +122,7 @@ Toolkit. On a Podman version with NVIDIA CDI support and a configured CDI device
 ```bash
 podman run --rm --network none --device nvidia.com/gpu=all --cpus 2 --memory 8g \
   -e GROMACS_ACCELERATION=gpu \
-  -v "$PWD/tools/gromacs/input:/input:ro" \
+  -v "$PWD/experiments/lysozyme-water/v1:/input:ro" \
   -v "$PWD/tools/gromacs/results:/output" \
   localhost/discovery-lysozyme:gpu smoke /input /output/smoke-gpu-01 20261008 2
 ```
@@ -168,7 +171,26 @@ This validates publication, registration and binding, not scientific execution.
 
 The longer `run` profile was started but stopped during fixed-volume
 equilibration due to local runtime; it has not been verified end to end.
-Discovery simulations and glycerol comparisons have not been run. No scientific
+
+On 2026-11-13, the MDP files moved out of the tool image into the versioned
+protocol bundle. A rebuilt CPU image containing only the runner completed the
+`smoke` profile locally against the read-only v1 bundle in under three minutes:
+minimization converged, run checksums passed, and `protocol-summary.tsv` and
+the effective MDP files reported the expected 2 ps stages at 300 K.
+
+Later on 2026-11-13, the `lysozyme-water-gromacs` agent ran the same `smoke`
+profile in Discovery on the CPU node pool, from a Studio conversation with the
+`lysozyme-protocol-v1` asset attached and mounted read-only at `/input`. The agent
+previewed the protocol, asked for confirmation and submitted one job, which
+finished in 209 s. The downloaded run folder reported `completed`, passed
+`run-SHA256SUMS`, recorded `protocol=lysozyme-water/v1`, and contained a 21-frame
+production trajectory and the RMSD, radius-of-gyration and thermodynamic analyses.
+Earlier attempts failed before the runner started. One cause was that the
+Discovery-managed AKS cluster had been stopped. The other was the tool command
+starting with an environment assignment; the command now starts with `python3`,
+as in Microsoft's GROMACS tool, and the image sets `GROMACS_ACCELERATION`.
+The GPU tool and the full `run` profile remain unverified in Discovery, and
+glycerol comparisons have not been run. No scientific
 convergence or formulation-performance claim follows from the smoke test.
 
 ## Inspect The Results
@@ -177,6 +199,7 @@ convergence or formulation-performance claim follows from the smoke test.
 | --- | --- |
 | `run-status.txt` | `completed` means all scripted steps returned successfully. It is not scientific approval. `failed` requires inspection of logs. |
 | `run-provenance.txt` | Records profile, acceleration, seed and threads; copied/effective parameter files record actual step counts. |
+| `protocol-summary.tsv` | Per stage: integrator, time step, steps, duration, temperature, pressure coupling and restraints, as executed. |
 | `preparation.log`, stage logs | Molecular assignments, preprocessing messages, minimization convergence and simulation diagnostics. |
 | `backbone-rmsd.xvg` | Change in the protein backbone relative to the production starting structure, after alignment; time in ns, distance in nm. |
 | `radius-of-gyration.xvg` | How spread out the protein is; use the file's axis labels and units. |
@@ -198,7 +221,7 @@ can be sampling noise. Preserve inconclusive results rather than force a ranking
 
 The Terraform deployment supplies infrastructure only. The community azd Discovery extension
 can register [tool.cpu.yaml](tool.cpu.yaml) and [../../agents/lysozyme-water-gromacs/agent.yaml](../../agents/lysozyme-water-gromacs/agent.yaml), following
-the [deployment instructions](../../README.md#deploy-the-tool-and-agent).
+the [deployment instructions](../../README.md#quick-start).
 [tool.cpu.yaml](tool.cpu.yaml) and [tool.gpu.yaml](tool.gpu.yaml) are based on the pinned
 [upstream GROMACS tool format](https://github.com/microsoft/discovery/tree/ddecc27bba4e3dec2a47f7f9a3c4f143a0c89b6d/agents/gromacs).
 They request two CPUs and respectively zero or one GPU. The Python command
@@ -235,9 +258,9 @@ unset for compatibility with the selected model. Prompt instructions are not a
 security boundary; review the generated script before confirming execution.
 
 The agent YAML was parsed and checked against the upstream Discovery agent
-schema. Its resolved CPU definition was deployed and read back successfully;
-it has not been invoked or evaluated. Agent orchestration and cloud input/output
-mounts remain unverified. Terraform provisioning does not
+schema. Its resolved CPU definition was deployed and read back successfully,
+and it orchestrated the cloud smoke run recorded under Validation Status. Terraform
+provisioning does not
 resolve these placeholders. The extension overrides the deployment copy's model
 from `DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME` and resolves the tool binding after
 the CPU tool is ready. Extension `0.2.0` successfully deployed both services to
@@ -262,35 +285,31 @@ Discovery schema and registration guide, registry permissions, CPU/GPU SKU
 availability and pool costs. Local preparation does not publish images or register
 tools or agents; the separate CPU publication and temporary version-check tool
 validation, followed by CPU tool and agent registration, are recorded above.
-The GPU tool remains unregistered; cloud simulation execution is still unverified.
+The GPU tool remains unregistered; only the CPU smoke profile has run in Discovery.
 The default Dockerfile targets
 remain local CLI runners; use `--target discovery` for these tool drafts.
 
 1. First verify the baseline locally and review the scientific assumptions.
-2. Upload the complete generated input directory as a Discovery data asset and
-   attach it to the GROMACS conversation. Confirm the files are directly under
-   the tool's read-only `/input` mount, not a nested directory.
-3. Start with the CPU draft and the packaged procedure with two CPU threads. Use a new
-   output directory for every attempt. Do not ask the agent to invent settings.
+2. Upload the protocol bundle with `azd discovery data upload lysozyme-water-protocol --confirm`
+   (after a `--dry-run`). It lands in the Terraform-owned `lysozyme-protocol-v1`
+   storage asset. Attach that asset to the GROMACS conversation in Discovery Studio.
+3. Start with the CPU tool, two CPU threads and the smoke profile. The agent
+   previews the protocol's parameters and asks for confirmation. Use a new
+   output directory for every attempt. Never ask the agent to edit the MDPs.
 4. Download the result bundle and check `run-status.txt` and stage logs before
   asking for interpretation. Require both a successful checked subprocess and
   completed run status; a completed tool invocation is not proof of success.
 
 Suggested first prompt:
 
-> Run the attached lysozyme-in-water technical smoke test. Use the GROMACS tool
-> to execute `bash /opt/lysozyme-water/run.sh smoke /input /output/smoke-01 20261008 2`
-> through a checked subprocess call. Verify the input checksums. Do not change
-> molecular parameters, durations, protonation, constraints or warning handling.
-> If any step fails, stop and report the relevant logs; do not retry with altered
-> chemistry. Confirm that `/output/smoke-01/run-status.txt` says `completed`.
-> Return the output directory, software version, actual simulated durations,
-> diagnostic findings and the RMSD and radius-of-gyration data with units.
-> Explain the 2 ps-per-stage results as a technical test only, not a formulation
-> result, a glycerol comparison or evidence of protein protection.
+> Run the attached lysozyme-in-water protocol as a technical smoke test with the
+> default seed. Show me the protocol version and its stage parameters first.
 
 Discovery execution must be verified separately after tool registration. The
 local test does not verify cloud mounts, permissions, scheduling or agent behavior.
+If a tool call fails with a generic "unexpected error" and no logs, check that the
+Discovery-managed AKS cluster in the supercomputer's managed resource group is
+running; subscription automation may stop it.
 
 ## Next: Add Glycerol
 

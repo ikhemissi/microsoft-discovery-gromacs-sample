@@ -17,6 +17,10 @@ discovery:
         storageContainerResourceId: ${DISCOVERY_STORAGE_CONTAINER_ID}
         blobContainerResourceId: ${DISCOVERY_KNOWLEDGE_BLOB_CONTAINER_ID}
         prefix: research
+      protocols:
+        storageContainerResourceId: ${DISCOVERY_STORAGE_CONTAINER_ID}
+        blobContainerResourceId: ${DISCOVERY_PROTOCOL_BLOB_CONTAINER_ID}
+        prefix: experiments
     datasets:
       lysozyme-water:
         source: knowledge
@@ -24,6 +28,12 @@ discovery:
         namespace: lysozyme-water
         version: v1
         storageAssetResourceId: ${DISCOVERY_KNOWLEDGE_ASSET_ID}
+      lysozyme-water-protocol:
+        source: protocols
+        directory: ./experiments/lysozyme-water/v1
+        namespace: lysozyme-water
+        version: v1
+        storageAssetResourceId: ${DISCOVERY_PROTOCOL_ASSET_ID}
 services:
   simulation:
     host: discovery.tool
