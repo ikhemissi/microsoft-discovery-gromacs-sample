@@ -2,7 +2,7 @@ name: microsoft-discovery-gromacs-sample
 requiredVersions:
   azd: ">=1.35.0"
   extensions:
-    ikhemissi.azd.discovery: "0.2.0"
+    ikhemissi.azd.discovery: "0.4.0"
 infra:
   provider: terraform
   path: infra
@@ -11,6 +11,19 @@ discovery:
   workspaceResourceId: ${DISCOVERY_WORKSPACE_ID}
   projectResourceId: ${DISCOVERY_PROJECT_ID}
   nodePoolResourceId: ${DISCOVERY_NODE_POOL_ID}
+  data:
+    sources:
+      knowledge:
+        storageContainerResourceId: ${DISCOVERY_STORAGE_CONTAINER_ID}
+        blobContainerResourceId: ${DISCOVERY_KNOWLEDGE_BLOB_CONTAINER_ID}
+        prefix: research
+    datasets:
+      lysozyme-water:
+        source: knowledge
+        directory: ./knowledge/lysozyme-water
+        namespace: lysozyme-water
+        version: v1
+        storageAssetResourceId: ${DISCOVERY_KNOWLEDGE_ASSET_ID}
 services:
   simulation:
     host: discovery.tool
@@ -30,7 +43,7 @@ services:
   researcher:
     host: discovery.agent
     project: ./agents/lysozyme-water-gromacs
-    uses: [simulation]
+    uses: [simulation, research]
     config:
       definition: ./agent.yaml
       model:
@@ -39,6 +52,20 @@ services:
         gromacsToolId:
           service: simulation
           output: resourceId
+      knowledgeBases:
+        - service: research
+  research:
+    host: discovery.knowledgebase
+    config:
+      name: lysozyme-water-research
+      bookshelfName: ${DISCOVERY_BOOKSHELF_NAME}
+      description: Open-access research papers on hen egg-white lysozyme in water.
+      copilotInstruction: Use for questions about lysozyme hydration, stability, unfolding and molecular dynamics in water. Cite the source papers.
+      sources:
+        - storageAssetResourceId: ${DISCOVERY_KNOWLEDGE_ASSET_ID}
+          userAssignedIdentityResourceId: ${DISCOVERY_MANAGED_IDENTITY_ID}
+      nodePoolResourceId: ${DISCOVERY_INDEX_NODE_POOL_ID}
+      autoindex: false
 workflows:
   up:
     steps:

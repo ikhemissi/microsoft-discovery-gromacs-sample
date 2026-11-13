@@ -95,6 +95,27 @@ variable "node_pool" {
   }
 }
 
+variable "index_node_pool" {
+  type = object({
+    vm_size        = optional(string, "Standard_E20s_v6")
+    min_node_count = optional(number, 0)
+    max_node_count = optional(number, 1)
+  })
+  description = "Memory-optimized node pool for Bookshelf knowledge-base indexing."
+  default     = {}
+
+  validation {
+    condition = (
+      var.index_node_pool.min_node_count >= 0 &&
+      var.index_node_pool.max_node_count >= 1 &&
+      var.index_node_pool.min_node_count <= var.index_node_pool.max_node_count &&
+      floor(var.index_node_pool.min_node_count) == var.index_node_pool.min_node_count &&
+      floor(var.index_node_pool.max_node_count) == var.index_node_pool.max_node_count
+    )
+    error_message = "Indexing node counts must be integers with 0 <= min_node_count <= max_node_count and max_node_count >= 1."
+  }
+}
+
 variable "chat_model" {
   type = object({
     name            = optional(string, "gpt-5.4")

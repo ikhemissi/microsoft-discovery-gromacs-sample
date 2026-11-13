@@ -58,6 +58,26 @@ output "DISCOVERY_BOOKSHELF_ID" {
   value       = azapi_resource.bookshelf.id
 }
 
+output "DISCOVERY_BOOKSHELF_NAME" {
+  description = "Discovery Bookshelf name used by the azd knowledge-base service."
+  value       = azapi_resource.bookshelf.name
+}
+
+output "DISCOVERY_KNOWLEDGE_BLOB_CONTAINER_ID" {
+  description = "Blob container holding knowledge-base documents uploaded by the azd extension."
+  value       = azapi_resource.knowledge_container.id
+}
+
+output "DISCOVERY_KNOWLEDGE_ASSET_ID" {
+  description = "Discovery storage asset for the lysozyme-in-water research documents."
+  value       = azapi_resource.knowledge_asset.id
+}
+
+output "DISCOVERY_INDEX_NODE_POOL_ID" {
+  description = "Memory-optimized node pool used for knowledge-base indexing."
+  value       = azapi_resource.index_node_pool.id
+}
+
 output "DISCOVERY_MANAGED_IDENTITY_ID" {
   description = "User-assigned managed identity used by Discovery."
   value       = azurerm_user_assigned_identity.discovery.id
