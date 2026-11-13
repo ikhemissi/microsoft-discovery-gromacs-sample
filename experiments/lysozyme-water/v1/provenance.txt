@@ -1,0 +1,4 @@
+protocol=lysozyme-water/v1
+structure_url=https://files.rcsb.org/download/1AKI.pdb
+retrieved_utc=2026-11-13T01:44:32Z
+selection=ATOM records, chain A, 129 residues; crystallographic waters excluded

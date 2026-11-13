@@ -3,11 +3,11 @@ set -Eeuo pipefail
 
 usage() {
 	printf '%s\n' \
-		'Usage: bash run.sh prepare INPUT_DIRECTORY' \
+		'Usage: bash run.sh prepare PROTOCOL_DIRECTORY' \
 		'       bash run.sh run INPUT_DIRECTORY NEW_OUTPUT_DIRECTORY [SEED] [THREADS]' \
 		'       bash run.sh smoke INPUT_DIRECTORY NEW_OUTPUT_DIRECTORY [SEED] [THREADS]' \
-		'prepare downloads 1AKI and packages the baseline inputs; it runs no simulation.' \
-		'run uses 100 ps per dynamics stage; smoke uses 2 ps and is only a technical test.' \
+		'prepare adds the 1AKI structure, provenance and checksums to a directory holding the five MDP files.' \
+		'run executes the protocol as written; smoke shortens each dynamics stage to 2 ps as a technical test.' \
 		'Both require GROMACS 2024+ with thread-MPI; defaults: seed 20261008, 2 CPU threads.' \
 		'GROMACS_ACCELERATION=cpu (default) or gpu; GPU mode requires CUDA and an NVIDIA device.'
 }
@@ -27,19 +27,72 @@ new_directory() {
 	mkdir -- "$1"
 }
 
+protocol_files=(ions.mdp em.mdp nvt.mdp npt.mdp md.mdp)
+structure_files=(source.pdb protein.pdb provenance.txt SHA256SUMS)
+
+# Prints an MDP value; GROMACS treats '-' and '_' in names alike and ';' starts a comment.
+mdp_value() {
+	awk -v wanted="$2" '
+		{ sub(/;.*/, "") }
+		index($0, "=") {
+			key = tolower(substr($0, 1, index($0, "=") - 1)); gsub(/[[:space:]]/, "", key); gsub(/-/, "_", key)
+			value = substr($0, index($0, "=") + 1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+			if (key == wanted) result = value
+		}
+		END { print result }
+	' "$1"
+}
+
+# Catches protocol mistakes that grompp accepts but that crash or invalidate a run.
+validate_protocol() {
+	local stage dt constraints
+	for stage in nvt npt md; do
+		[[ $(mdp_value "$stage.mdp" integrator) == md ]] || fail "$stage.mdp must use integrator = md."
+		dt=$(mdp_value "$stage.mdp" dt)
+		constraints=$(mdp_value "$stage.mdp" constraints)
+		if awk -v dt="${dt:-0.001}" 'BEGIN { exit !(dt > 0.001) }' && [[ "${constraints:-none}" == none ]]; then
+			fail "$stage.mdp uses dt = $dt ps without bond constraints; use dt = 0.001 or constrain bonds."
+		fi
+		if [[ $(mdp_value "$stage.mdp" continuation) == yes && $(mdp_value "$stage.mdp" gen_vel) == yes ]]; then
+			fail "$stage.mdp sets continuation = yes and gen_vel = yes; a continued stage must keep its velocities."
+		fi
+	done
+	[[ $(mdp_value nvt.mdp gen_vel) == yes ]] || fail 'nvt.mdp must generate velocities (gen_vel = yes).'
+	for stage in npt md; do
+		[[ $(mdp_value "$stage.mdp" continuation) == yes ]] || fail "$stage.mdp must continue from the previous stage (continuation = yes)."
+	done
+	[[ $(mdp_value md.mdp nstxout_compressed) =~ ^[1-9][0-9]*$ ]] || fail 'md.mdp must write a compressed trajectory (nstxout-compressed > 0) for analysis.'
+}
+
+summarize_protocol() {
+	local stage
+	printf 'stage\tintegrator\tdt_ps\tnsteps\tduration_ps\tref_t_K\tpcoupl\tref_p_bar\tposition_restraints\n'
+	for stage in em nvt npt md; do
+		local integrator dt nsteps duration
+		integrator=$(mdp_value "$stage.mdp" integrator)
+		dt=$(mdp_value "$stage.mdp" dt)
+		nsteps=$(mdp_value "$stage.mdp" nsteps)
+		duration=-
+		[[ "$integrator" == md ]] && duration=$(awk -v dt="$dt" -v n="$nsteps" 'BEGIN { printf "%g", dt * n }')
+		printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$stage" "$integrator" "${dt:--}" "$nsteps" "$duration" \
+			"$(mdp_value "$stage.mdp" ref_t)" "$(mdp_value "$stage.mdp" pcoupl)" "$(mdp_value "$stage.mdp" ref_p)" \
+			"$([[ $(mdp_value "$stage.mdp" define) == *-DPOSRES* ]] && echo yes || echo no)"
+	done
+}
+
 prepare() {
 	local destination="$1"
-	local source_directory
-	source_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 	local structure_url='https://files.rcsb.org/download/1AKI.pdb'
 	for dependency in curl awk sha256sum; do
 		require_command "$dependency"
 	done
-	for filename in ions.mdp em.mdp nvt.mdp npt.mdp md.mdp; do
-		[[ -s "$source_directory/$filename" ]] || fail "Missing protocol file: $filename"
+	[[ -d "$destination" ]] || fail "Protocol directory not found: $destination"
+	for filename in "${protocol_files[@]}"; do
+		[[ -s "$destination/$filename" ]] || fail "Missing protocol file: $filename"
 	done
-	new_directory "$destination"
-	cp -- "$source_directory/run.sh" "$source_directory/"*.mdp "$destination/"
+	for filename in "${structure_files[@]}"; do
+		[[ ! -e "$destination/$filename" ]] || fail "Refusing to overwrite existing path: $destination/$filename"
+	done
 	cd -- "$destination"
 	curl --fail --location --proto '=https' --proto-redir '=https' \
 		--retry 3 --connect-timeout 15 --max-time 120 \
@@ -57,9 +110,9 @@ prepare() {
 			print "END"
 		}
 	' source.pdb > protein.pdb || fail 'Unexpected 1AKI structure; inspect chain A, alternate locations and residue count.'
-	printf 'structure_url=%s\nretrieved_utc=%s\nselection=ATOM records, chain A, 129 residues; crystallographic waters excluded\n' \
-		"$structure_url" "$(date -u +%FT%TZ)" > provenance.txt
-	sha256sum source.pdb protein.pdb run.sh ./*.mdp provenance.txt > SHA256SUMS
+	printf 'protocol=%s\nstructure_url=%s\nretrieved_utc=%s\nselection=ATOM records, chain A, 129 residues; crystallographic waters excluded\n' \
+		"$(basename -- "$(dirname -- "$PWD")")/$(basename -- "$PWD")" "$structure_url" "$(date -u +%FT%TZ)" > provenance.txt
+	sha256sum source.pdb protein.pdb ./*.mdp provenance.txt > SHA256SUMS
 	printf 'Prepared inputs in %s\n' "$PWD"
 }
 
@@ -77,7 +130,7 @@ run() {
 	require_command "$gmx"
 	require_command sha256sum
 	input_directory=$(cd -- "$input_directory" && pwd)
-	for filename in protein.pdb source.pdb run.sh provenance.txt SHA256SUMS ions.mdp em.mdp nvt.mdp npt.mdp md.mdp; do
+	for filename in "${structure_files[@]}" "${protocol_files[@]}"; do
 		[[ -s "$input_directory/$filename" ]] || fail "Missing input: $filename"
 	done
 	(cd -- "$input_directory" && sha256sum --check --strict SHA256SUMS)
@@ -89,8 +142,9 @@ run() {
 	printf 'running\n' > run-status.txt
 	cp -- "$input_directory/"*.mdp "$input_directory/protein.pdb" \
 		"$input_directory/source.pdb" "$input_directory/provenance.txt" \
-		"$input_directory/run.sh" "$input_directory/SHA256SUMS" .
+		"$input_directory/SHA256SUMS" .
 	mv SHA256SUMS input-SHA256SUMS
+	validate_protocol
 	sed -i "s/^gen_seed[[:space:]]*=.*/gen_seed = $seed/" nvt.mdp
 	if [[ "$profile" == smoke ]]; then
 		sed -i -e 's/^nsteps[[:space:]]*=.*/nsteps = 1000/' \
@@ -98,6 +152,7 @@ run() {
 			-e 's/^nstenergy[[:space:]]*=.*/nstenergy = 50/' \
 			-e 's/^nstlog[[:space:]]*=.*/nstlog = 50/' nvt.mdp npt.mdp md.mdp
 	fi
+	summarize_protocol > protocol-summary.tsv
 	"$gmx" --version > gromacs-version.txt 2>&1
 	if [[ "$acceleration" == gpu ]]; then
 		grep -Eiq '^GPU support:[[:space:]]+CUDA' gromacs-version.txt || fail 'GPU mode requires a CUDA-enabled GROMACS build.'

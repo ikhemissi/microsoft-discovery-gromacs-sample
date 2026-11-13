@@ -1,60 +1,30 @@
-# Lysozyme In Water: First Discovery Experiment
+# GROMACS tool
 
-## Purpose
+Container images and runner for the [lysozyme-in-water experiment](../../docs/experiment.md).
+The runner executes a reviewed [protocol bundle](../../experiments/lysozyme-water/README.md)
+unchanged: it checks the inputs, prepares the system, runs minimization, NVT, NPT
+and production, analyses the trajectory and records provenance and checksums.
+Everything on this page runs locally without Azure; see
+[Run in Discovery](../../docs/run-in-discovery.md) for the cloud workflow.
 
-Learn the research workflow on a small public protein before adding an ingredient.
-The question is: **how does lysozyme move in water during a short simulation?**
-GROMACS calculates molecular motion; Discovery can organize the inputs, invoke
-the tool and help explain its outputs. This is an educational baseline, not a
-validated formulation study or evidence of protein protection.
-
-The first milestone is a complete water-only run. Glycerol comparisons are the
-second milestone and are not implemented yet. The local preparation and runner
-scripts do not create Azure resources or submit cloud jobs. The separate azd
-Discovery extension publishes and registers the CPU tool and agent.
-
-## Inputs And Assumptions
-
-| Item | Baseline choice |
+| File | Purpose |
 | --- | --- |
-| Protein | Hen egg-white lysozyme, public PDB entry 1AKI, chain A, 129 residues. |
-| Preparation | Keep protein ATOM records; remove crystallographic waters; rebuild hydrogens with GROMACS. Unexpected alternate locations or a changed source checksum stop preparation. |
-| Molecular parameters | GROMACS-bundled OPLS-AA protein parameters and SPC/E water. These are explicit choices, not the upstream helper's CHARMM defaults. |
-| Chemistry | Standard pdb2gmx protonation/terminus assignments and geometry-detected disulfides; no explicit pH model. Review these assignments before scientific use. |
-| Disulfides | Expect Cys6-Cys127, Cys30-Cys115, Cys64-Cys80 and Cys76-Cys94. Confirm them in the preparation log/topology. |
-| Solvent | Water and neutralizing counterions only; no added salt or glycerol. |
-| Box | Dodecahedron with 1.0 nm initial protein-to-box clearance. |
-| Conditions | 300 K; 1 bar during pressure equilibration and production. |
-| Minimization | Steepest descent, up to 50,000 steps, force threshold 1,000 kJ/mol/nm. Failure to reach it stops the run. |
-| Equilibration | 100 ps at fixed volume, then 100 ps at controlled pressure, with protein position restraints. |
-| Production | 100 ps without position restraints: 50,000 steps at 0.002 ps per step. This is not sufficient to establish equilibrium or formulation efficacy. |
-| Outputs | Coordinates and energies every 1 ps; fixed velocity and ion-placement seed; two CPU threads by default. |
+| [run.sh](run.sh) | The runner: `prepare`, `smoke` (2 ps per dynamics stage) and `run` (protocol as written) |
+| [test.sh](test.sh) | Offline safeguard tests with a mocked GROMACS |
+| [Dockerfile](Dockerfile) | CPU image (Debian GROMACS 2025.2); `discovery` target adds Python for Discovery |
+| [Dockerfile.gpu](Dockerfile.gpu) | CUDA image built from checksum-pinned GROMACS 2025.2 source |
+| [tool.cpu.yaml](tool.cpu.yaml), [tool.gpu.yaml](tool.gpu.yaml) | Discovery tool definitions |
 
-The ion-placement input uses a cutoff electrostatic calculation solely to generate
-the temporary input for replacing waters with ions. Minimization and dynamics use
-PME electrostatics. No preprocessing warnings are bypassed. Numerical instabilities
-stop the workflow rather than trigger silent changes to the scientific protocol.
+## Protocol
 
-## Prepare The Data
+The runner reads a protocol bundle, by default
+[experiments/lysozyme-water/v1](../../experiments/lysozyme-water/v1): five
+hand-written MDP files, the prepared structure, provenance and checksums. It is
+committed and ready to use. `run.sh prepare` completes a new version's directory
+and refuses to overwrite one; see
+[Publishing a new version](../../experiments/lysozyme-water/README.md#publishing-a-new-version).
 
-Run from the repository root. Preparation requires Bash, curl, awk and sha256sum.
-It downloads the public structure, checks its pinned fingerprint, and records
-source, retrieval time and input checksums. It does not execute downloaded code.
-
-```bash
-bash tools/gromacs/run.sh prepare tools/gromacs/input
-bash tools/gromacs/test.sh tools/gromacs/input
-```
-
-The destination must not already exist. Keep an existing verified bundle for
-reproducibility; use a new directory when preparing a different protocol version.
-After changing the runner, prepare a fresh bundle in a new directory and use that
-bundle in the commands below. Do not overwrite the old checksummed runner.
-The generated input and result directories are git-ignored. The bundle contains
-the original PDB, selected protein, five parameter files, runner and provenance.
-If RCSB updates the source file, inspect that change before updating the pinned hash.
-
-## Run Locally
+## Run locally
 
 The CPU container avoids a host GROMACS installation. Podman is used below;
 Docker supports the same build/run commands. Build downloads packages, but the
@@ -68,20 +38,21 @@ an equilibrated system or useful scientific sampling.
 podman build -t localhost/discovery-lysozyme:baseline tools/gromacs
 mkdir -p tools/gromacs/results
 podman run --rm --network none --cpus 2 --memory 2g \
-  -v "$PWD/tools/gromacs/input:/input:ro" \
+  -v "$PWD/experiments/lysozyme-water/v1:/input:ro" \
   -v "$PWD/tools/gromacs/results:/output" \
   localhost/discovery-lysozyme:baseline smoke /input /output/smoke-01 20261008 2
 ```
 
-For the 100 ps-per-stage baseline, replace `smoke` with `run` and use a new
-output name such as `/output/baseline-01`. CPU execution may take substantially
-longer than an interactive demonstration; measure before promising a live run.
+For the protocol's full 100 ps-per-stage durations, replace `smoke` with `run` and use a new
+output name such as `/output/baseline-01`. It took 42 minutes on a
+`Standard_D4s_v6` node in Discovery (about 11 ns/day on two threads); laptops
+can be several times slower, and a GPU is much faster.
 
 Alternatively, with GROMACS 2024+ (thread-MPI) available as `gmx`:
 
 ```bash
 bash tools/gromacs/run.sh smoke \
-  tools/gromacs/input \
+  experiments/lysozyme-water/v1 \
   tools/gromacs/results/smoke-01 20261008 2
 ```
 
@@ -96,7 +67,7 @@ alongside results for long-term reproduction. The runner also saves the exact
 GROMACS version and effective simulation parameters. Package repositories and the
 base-image tag can change, so rebuilding later is not an immutable environment.
 
-### CPU Or GPU
+### CPU or GPU
 
 `GROMACS_ACCELERATION=cpu` is the default. Explicit `gpu` mode offloads short-range
 nonbonded forces during NVT, NPT and production; minimization, PME, bonded forces
@@ -112,71 +83,62 @@ podman build -f tools/gromacs/Dockerfile.gpu --target gpu \
   -t localhost/discovery-lysozyme:gpu tools/gromacs
 ```
 
-The image targets A100/H100 (SM 80/90), CUDA 12.6 and x86-64 AVX2 CPUs. Building
-requires no GPU, but execution needs a compatible host driver and NVIDIA Container
-Toolkit. On a Podman version with NVIDIA CDI support and a configured CDI device:
+The image targets A100/H100 (SM 80/90), CUDA 12.6 and x86-64 AVX2 CPUs; SM 8.6
+laptop GPUs such as the RTX A2000 also run it. Building requires no GPU, but
+execution needs a compatible host driver and NVIDIA Container Toolkit. On a
+Podman version with NVIDIA CDI support and a configured CDI device:
 
 ```bash
 podman run --rm --network none --device nvidia.com/gpu=all --cpus 2 --memory 8g \
   -e GROMACS_ACCELERATION=gpu \
-  -v "$PWD/tools/gromacs/input:/input:ro" \
+  -v "$PWD/experiments/lysozyme-water/v1:/input:ro" \
   -v "$PWD/tools/gromacs/results:/output" \
   localhost/discovery-lysozyme:gpu smoke /input /output/smoke-gpu-01 20261008 2
 ```
 
 Docker uses `--gpus all` instead of the Podman CDI device flag. See the
 [NVIDIA Container Toolkit guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/).
+On WSL 2 the Windows NVIDIA driver is enough; replace the CDI flag with
+`--device /dev/dxg -v /usr/lib/wsl:/usr/lib/wsl:ro -e LD_LIBRARY_PATH=/usr/lib/wsl/lib`.
 Review GROMACS LGPL and NVIDIA container redistribution terms before publishing
 images. Preserve image digests; the pinned source does not freeze base images or
-package repositories. GPU execution and CPU/GPU agreement still need validation
-on actual hardware; a small system may not benefit from offloading.
+package repositories. A small system may not benefit from offloading on every GPU.
 
-## Validation Status
+## Validation status
 
-On 2026-10-08, the complete `smoke` profile passed locally with GROMACS
-2025.2 (Debian package 2025.2-1), two CPU threads and networking disabled.
-The system contained 23,961 atoms; the four expected disulfides were formed;
-minimization converged in 388 steps. Each dynamics stage ran for 2 ps, and
-the production trajectory contained 21 frames spanning 0-2 ps. RMSD,
-radius-of-gyration and thermodynamic outputs were generated and input/output
-checksums passed. Failure-path tests also passed.
+The CPU version was tested both locally and on Azure; the GPU version was tested
+locally. All runs used the v1 protocol, seed `20261008` and GROMACS 2025.2.
 
-On 2026-10-09, the CPU smoke workflow passed again in the Python-enabled
-Discovery build target with networking disabled; completed status, CPU provenance
-and recorded run checksums were verified. Tests cover CPU/GPU stage arguments,
-unsupported modes/builds and GPU failures without fallback. The CUDA Discovery
-image built successfully, reports GROMACS 2025.2 with CUDA support, and starts
-Python 3.12.3. A forced GPU computation correctly failed when no device was
-exposed. This is not a successful GPU simulation.
+| Profile | Where | Hardware | Result |
+| --- | --- | --- | --- |
+| `run` (100 ps per stage) | Microsoft Discovery, run by the agent from Studio | `Standard_D4s_v6` node pool, 2 CPU threads | Completed in 42 minutes at about 11 ns/day; checksums passed, 101-frame production trajectory and all analyses produced ([results](../../docs/experiment.md#results)) |
+| `smoke` (2 ps per stage) | Microsoft Discovery, run by the agent from Studio | `Standard_D4s_v6` node pool, 2 CPU threads | Completed in 3.5 minutes; protocol attached as a storage asset and mounted read-only, checksums passed |
+| `smoke` | Local container, offline | 2 CPU threads | Completed in under 3 minutes; 23,961 atoms, the four expected disulfides, minimization converged, checksums passed |
+| `smoke` | Local container under WSL 2, offline | NVIDIA RTX A2000 Laptop GPU | Completed; short-range forces on the GPU, production at 41.9 ns/day versus 3.9 ns/day on 2 local CPU threads, checksums passed |
 
-Also on 2026-10-09, the CPU Discovery image was published to the project's ACR.
-A temporary action-based tool was registered with Microsoft Discovery using that
-image, then invoked through the Discovery job REST API on the existing CPU node
-pool. The fixed `gmx --version` command completed with operation status `Succeeded`
-and logs reporting `2025.2-Debian_2025.2_1`. The temporary registration was removed
-afterward. This verifies ACR-backed tool registration and runtime execution, not
-simulation execution, input/output mounts, or agent-driven orchestration.
+The GPU smoke run agreed with the CPU smoke run within the variation expected between
+independent 2 ps trajectories:
 
-On 2026-10-10, the temporary azd deployment hook passed against the real `dev`
-Discovery workspace. It published the CPU image pinned to digest
-`sha256:1e43981465a395b62a546dd4167359b5bc225c94ee77af23fd5d5ac3dd53ec36`,
-registered `lysozyme-water-cpu` with provisioning state `Succeeded`, and deployed
-`lysozyme-water-gromacs` version `1`. Authenticated read-back verified model
-`gpt-5-4`, the CPU tool binding, both confirmation settings enabled, and injected
-data-handling tools enabled. No simulation or agent invocation was submitted.
-This validates publication, registration and binding, not scientific execution.
+| Production average or final value | CPU | GPU |
+| --- | --- | --- |
+| Temperature | 299.0 K | 300.7 K |
+| Density | 1012.3 kg/m³ | 1011.5 kg/m³ |
+| Final backbone RMSD | 0.054 nm | 0.051 nm |
+| Final radius of gyration | 1.412 nm | 1.416 nm |
 
-The longer `run` profile was started but stopped during fixed-volume
-equilibration due to local runtime; it has not been verified end to end.
-Discovery simulations and glycerol comparisons have not been run. No scientific
-convergence or formulation-performance claim follows from the smoke test.
+[test.sh](test.sh) also covers the failure paths: invalid protocols, unsupported
+acceleration modes and GPU failures without CPU fallback.
 
-## Inspect The Results
+Not yet done: the glycerol comparisons. Neither the smoke runs nor the 100 ps
+run support scientific convergence or formulation-performance claims.
+
+## Inspect the results
 
 | Output | Meaning |
 | --- | --- |
 | `run-status.txt` | `completed` means all scripted steps returned successfully. It is not scientific approval. `failed` requires inspection of logs. |
 | `run-provenance.txt` | Records profile, acceleration, seed and threads; copied/effective parameter files record actual step counts. |
+| `protocol-summary.tsv` | Per stage: integrator, time step, steps, duration, temperature, pressure coupling and restraints, as executed. |
 | `preparation.log`, stage logs | Molecular assignments, preprocessing messages, minimization convergence and simulation diagnostics. |
 | `backbone-rmsd.xvg` | Change in the protein backbone relative to the production starting structure, after alignment; time in ns, distance in nm. |
 | `radius-of-gyration.xvg` | How spread out the protein is; use the file's axis labels and units. |
@@ -184,139 +146,5 @@ convergence or formulation-performance claim follows from the smoke test.
 | `md.xtc`, `centered.xtc`, `md.tpr`, `md.gro` | Raw/centered trajectories and matching simulation/final structures. |
 | `gromacs-version.txt`, provenance and checksum files | Inputs, chosen seed, software and effective protocol for audit and reproduction. |
 
-Before interpretation, check all stages, not just production plots: correct
-protein/disulfides, sensible density and temperature, absence of instability,
-trajectory continuity and no systematic drift. Instantaneous pressure fluctuates
-strongly in small systems; do not demand every frame equal 1 bar. The script's
-checks are necessary technical checks, not a complete equilibration assessment.
-
-An unchanged protein over 100 ps does not demonstrate protection, thermodynamic
-stability or retained activity. Differences between individual short trajectories
-can be sampling noise. Preserve inconclusive results rather than force a ranking.
-
-## Use In Discovery
-
-The Terraform deployment supplies infrastructure only. The community azd Discovery extension
-can register [tool.cpu.yaml](tool.cpu.yaml) and [../../agents/lysozyme-water-gromacs/agent.yaml](../../agents/lysozyme-water-gromacs/agent.yaml), following
-the [deployment instructions](../../README.md#deploy-the-tool-and-agent).
-[tool.cpu.yaml](tool.cpu.yaml) and [tool.gpu.yaml](tool.gpu.yaml) are based on the pinned
-[upstream GROMACS tool format](https://github.com/microsoft/discovery/tree/ddecc27bba4e3dec2a47f7f9a3c4f143a0c89b6d/agents/gromacs).
-They request two CPUs and respectively zero or one GPU. The Python command
-preserves script failures; the description requires checked subprocess execution
-of the packaged runner. These instructions guide generated code, not enforce a
-security boundary. A cloud job is billable; require confirmation before running.
-
-### Agent Definition
-
-[../../agents/lysozyme-water-gromacs/agent.yaml](../../agents/lysozyme-water-gromacs/agent.yaml) defines a prompt agent inspired by the
-[upstream GROMACS agent](https://github.com/microsoft/discovery/blob/main/agents/gromacs/agent.yaml).
-It follows the upstream plan, script, execution output and summary structure,
-but uses this sample's packaged runner instead of the upstream `gromacs_utils`
-library. It preserves OPLS-AA/SPC/E, forbids automatic recovery or GPU fallback,
-and requires successful execution, completed runner status, checked output
-checksums and actual result files before reporting completion.
-
-Resolve these placeholders when registering the agent:
-
-| Placeholder | Value |
-| --- | --- |
-| `{{CHAT-MODEL}}` | Chat-model/deployment identifier supported by the target Discovery project. |
-| `{{gromacsToolId}}` | Full ARM resource ID of the registered `lysozyme-water-cpu` tool, or the GPU tool for an explicitly selected GPU configuration. |
-
-The agent binds one tool, not both. Start with CPU; a GPU configuration requires
-the GPU image/tool and compatible GPU node-pool capacity, which the current
-deployment does not provide. Never bind the deleted version-check tool or use
-that diagnostic as evidence that the simulation workflow works.
-
-Both `humanInTheLoop` and tool `confirmation` are enabled so the agent can ask
-for clarification and tool invocation requires confirmation. Data-handling tools
-remain enabled for inputs and result sharing. Model sampling options are left
-unset for compatibility with the selected model. Prompt instructions are not a
-security boundary; review the generated script before confirming execution.
-
-The agent YAML was parsed and checked against the upstream Discovery agent
-schema. Its resolved CPU definition was deployed and read back successfully;
-it has not been invoked or evaluated. Agent orchestration and cloud input/output
-mounts remain unverified. Terraform provisioning does not
-resolve these placeholders. The extension overrides the deployment copy's model
-from `DISCOVERY_CHAT_MODEL_DEPLOYMENT_NAME` and resolves the tool binding after
-the CPU tool is ready. Extension `0.2.0` successfully deployed both services to
-the existing `dev` environment on 2026-10-12 using Podman. No agent invocation
-or simulation was performed; the earlier registration used the legacy hook.
-
-### Tool Images And Execution
-
-Build the matching Python-enabled targets, which accept Discovery's script
-command instead of treating every argument as a runner CLI argument:
-
-```bash
-podman build --target discovery -t localhost/discovery-lysozyme:discovery-cpu \
-  tools/gromacs
-podman build --target discovery -f tools/gromacs/Dockerfile.gpu \
-  -t localhost/discovery-lysozyme:discovery-gpu tools/gromacs
-```
-
-Before registration, resolve the `{name}` registry placeholder for the target
-environment, publish the matching images, and pin their digests. Check the current
-Discovery schema and registration guide, registry permissions, CPU/GPU SKU
-availability and pool costs. Local preparation does not publish images or register
-tools or agents; the separate CPU publication and temporary version-check tool
-validation, followed by CPU tool and agent registration, are recorded above.
-The GPU tool remains unregistered; cloud simulation execution is still unverified.
-The default Dockerfile targets
-remain local CLI runners; use `--target discovery` for these tool drafts.
-
-1. First verify the baseline locally and review the scientific assumptions.
-2. Upload the complete generated input directory as a Discovery data asset and
-   attach it to the GROMACS conversation. Confirm the files are directly under
-   the tool's read-only `/input` mount, not a nested directory.
-3. Start with the CPU draft and the packaged procedure with two CPU threads. Use a new
-   output directory for every attempt. Do not ask the agent to invent settings.
-4. Download the result bundle and check `run-status.txt` and stage logs before
-  asking for interpretation. Require both a successful checked subprocess and
-  completed run status; a completed tool invocation is not proof of success.
-
-Suggested first prompt:
-
-> Run the attached lysozyme-in-water technical smoke test. Use the GROMACS tool
-> to execute `bash /opt/lysozyme-water/run.sh smoke /input /output/smoke-01 20261008 2`
-> through a checked subprocess call. Verify the input checksums. Do not change
-> molecular parameters, durations, protonation, constraints or warning handling.
-> If any step fails, stop and report the relevant logs; do not retry with altered
-> chemistry. Confirm that `/output/smoke-01/run-status.txt` says `completed`.
-> Return the output directory, software version, actual simulated durations,
-> diagnostic findings and the RMSD and radius-of-gyration data with units.
-> Explain the 2 ps-per-stage results as a technical test only, not a formulation
-> result, a glycerol comparison or evidence of protein protection.
-
-Discovery execution must be verified separately after tool registration. The
-local test does not verify cloud mounts, permissions, scheduling or agent behavior.
-
-## Next: Add Glycerol
-
-The proposed comparison is 0%, 10% and 20% glycerol by **solvent mass**:
-glycerol mass divided by the combined water and glycerol mass, excluding protein
-and ions. Do not substitute molecule counts or solution volume percentages.
-
-Before implementation, an MD-experienced reviewer should approve glycerol
-parameters compatible with the protein/water force field, protonation, temperature,
-salt conditions, box composition and equilibration/convergence criteria. Allocate
-at least three independent replicas per condition and choose durations based on
-the question and sampling evidence, not the 100 ps demonstration setting.
-Add hydration and protein-glycerol interaction analyses; compare uncertainty, not
-only trajectories. A second review should approve conclusions before presentation.
-
-## Literature And Provenance
-
-- [PDB 1AKI](https://www.rcsb.org/structure/1AKI): public starting coordinates,
-  1.5 angstrom X-ray structure, not a prepared simulation system.
-- [Upstream lysozyme inputs](https://github.com/microsoft/discovery/tree/ddecc27bba4e3dec2a47f7f9a3c4f143a0c89b6d/agents/gromacs/tools/gromacs/example-input-files/lysozyme):
-  workflow inspiration. This sample uses its own explicit OPLS-AA/SPC/E protocol,
-  C-rescale pressure coupling, all-bond constraints and 100 ps stage durations.
-- Ghattyvenkatakrishna and Carri (2014),
-  [Effect of glycerol-water binary mixtures on the structure and dynamics of protein solutions](https://doi.org/10.1080/07391102.2013.773562):
-  published 20 ns lysozyme simulations at 0%, 10%, 20%, 30% and 100% glycerol by
-  weight. This motivates stage two; the current baseline is not a reproduction
-  of its methods or results. Full methods/parameter availability must be checked.
-- [GROMACS parameter reference](https://manual.gromacs.org/2025.2/user-guide/mdp-options.html):
-  definitions and units of the simulation settings.
+See [Interpreting results](../../docs/experiment.md#interpreting-results) before
+drawing any conclusion from these files.

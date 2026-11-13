@@ -1,5 +1,8 @@
+; Lysozyme in water, protocol v1: unrestrained production.
+; Same thermostat and barostat as NPT, without position restraints.
 integrator = md
 dt = 0.002
+; 100 ps (2 ps in the smoke profile); far too short for scientific conclusions.
 nsteps = 50000
 continuation = yes
 constraints = all-bonds

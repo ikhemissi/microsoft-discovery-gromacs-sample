@@ -13,3 +13,5 @@ crash.*.log
 !infra/main.tfvars.json
 /tools/gromacs/input/
 /tools/gromacs/results/
+__pycache__/
+/docs/tmp/

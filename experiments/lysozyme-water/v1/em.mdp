@@ -1,0 +1,18 @@
+; Lysozyme in water, protocol v1: energy minimization.
+; Removes steric clashes from solvation before any dynamics.
+integrator = steep
+; Stop once the largest force is below 1000 kJ/mol/nm (runner checks this).
+emtol = 1000.0
+; Initial step size, nm.
+emstep = 0.01
+nsteps = 50000
+; Non-bonded settings shared by all stages: Verlet lists, PME electrostatics
+; and 1.0 nm cut-offs, as used with OPLS-AA in GROMACS.
+cutoff-scheme = Verlet
+nstlist = 10
+coulombtype = PME
+rcoulomb = 1.0
+rvdw = 1.0
+pbc = xyz
+; Long-range dispersion correction for energy and pressure.
+DispCorr = EnerPres

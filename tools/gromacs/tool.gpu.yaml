@@ -1,5 +1,5 @@
 name: lysozyme-water-gpu
-description: Fixed-protocol lysozyme-in-water educational baseline using GROMACS with NVIDIA CUDA. GPU execution is not yet validated.
+description: Runs a reviewed lysozyme-in-water GROMACS protocol bundle with NVIDIA CUDA. GPU execution is not yet validated.
 version: 1.0.0
 category: Physics-Based Simulations
 license: LGPL-2.1-or-later
@@ -27,19 +27,18 @@ infra:
       pool_size: 1
 code_environments:
   - language: python3
-    command: >-
-      GROMACS_ACCELERATION=gpu python3 "/{{scriptName}}" > "{{output_directory}}/logs.out" 2>&1
+    command: "python3 \"/{{scriptName}}\" > {{output_directory}}/logs.out 2>&1; exit_code=$?; tail -n 100 {{output_directory}}/logs.out; exit $exit_code"
     description: |
       Run only the packaged /opt/lysozyme-water/run.sh via subprocess.run with check=True.
-      Mount the complete prepared input bundle directly at /input, read-only.
-      Inputs: protein.pdb, source.pdb, run.sh, provenance.txt, SHA256SUMS and five MDP files.
+      Mount the attached protocol bundle directly at /input, read-only.
+      Bundle: five hand-written MDP files, protein.pdb, source.pdb, provenance.txt and SHA256SUMS.
       CLI: bash /opt/lysozyme-water/run.sh PROFILE /input /output/NEW_RUN_NAME SEED 2
-      PROFILE is smoke (2 ps per dynamics stage) or run (100 ps per stage).
+      PROFILE run executes the MDPs as written; smoke shortens each dynamics stage to 2 ps.
       Default SEED is 20261008; valid seeds are integers from 1 to 999999999.
       Obtain explicit user confirmation before executing a billable job.
       Offload short-range nonbonded dynamics forces to GPU; keep minimization and PME on CPU.
       A compatible NVIDIA device is required; missing GPU support must fail, never fall back.
-      Do not modify force fields, molecular parameters, durations or warning handling.
+      Never edit the MDP files; a parameter change needs a new reviewed protocol version.
       Write to a new output subdirectory on every attempt; never overwrite results.
       Outputs include run-status.txt, logs, provenance, checksums, XVG analyses and trajectories.
       Require subprocess success and run-status.txt equal to completed before reporting success.

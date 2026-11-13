@@ -78,6 +78,16 @@ output "DISCOVERY_INDEX_NODE_POOL_ID" {
   value       = azapi_resource.index_node_pool.id
 }
 
+output "DISCOVERY_PROTOCOL_BLOB_CONTAINER_ID" {
+  description = "Blob container holding simulation protocol bundles uploaded by the azd extension."
+  value       = azapi_resource.protocol_container.id
+}
+
+output "DISCOVERY_PROTOCOL_ASSET_ID" {
+  description = "Discovery storage asset for the lysozyme-in-water protocol v1 bundle."
+  value       = azapi_resource.protocol_asset.id
+}
+
 output "DISCOVERY_MANAGED_IDENTITY_ID" {
   description = "User-assigned managed identity used by Discovery."
   value       = azurerm_user_assigned_identity.discovery.id

@@ -5,13 +5,14 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/lysozyme-water
-COPY run.sh *.mdp ./
+COPY run.sh ./
 
 FROM base AS discovery
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends python3 \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& mkdir -p /app/workdir /input /output
+ENV GROMACS_ACCELERATION=cpu
 WORKDIR /app/workdir
 CMD ["/bin/bash"]
 

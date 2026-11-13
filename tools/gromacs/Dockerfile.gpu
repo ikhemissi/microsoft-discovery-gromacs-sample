@@ -34,13 +34,14 @@ COPY --from=builder /opt/gromacs /opt/gromacs
 ENV PATH="/opt/gromacs/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/gromacs/lib:/opt/gromacs/lib64:${LD_LIBRARY_PATH}"
 WORKDIR /opt/lysozyme-water
-COPY run.sh *.mdp ./
+COPY run.sh ./
 
 FROM base AS discovery
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends python3 \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& mkdir -p /app/workdir /input /output
+ENV GROMACS_ACCELERATION=gpu
 WORKDIR /app/workdir
 CMD ["/bin/bash"]
 

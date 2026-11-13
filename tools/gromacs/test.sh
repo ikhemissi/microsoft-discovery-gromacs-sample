@@ -48,7 +48,20 @@ for phase in nvt npt md; do
 	grep -q '^nsteps = 1000$' "$temporary_directory/smoke-run/$phase.mdp"
 	grep -q '^nsteps = 50000$' "$input_directory/$phase.mdp"
 done
-
+# Each case edits a copy of the protocol and re-checksums it so validation, not integrity, rejects it.
+expect_invalid_protocol() {
+	local name="$1" file="$2" expression="$3" message="$4"
+	cp -R -- "$input_directory" "$temporary_directory/$name-input"
+	sed -i "$expression" "$temporary_directory/$name-input/$file"
+	(cd -- "$temporary_directory/$name-input" && sha256sum source.pdb protein.pdb ./*.mdp provenance.txt > SHA256SUMS)
+	expect_failure env GMX=false bash "$runner" run "$temporary_directory/$name-input" "$temporary_directory/$name-output"
+	grep -q "$message" "$temporary_directory/last-command.log"
+	[[ $(< "$temporary_directory/$name-output/run-status.txt") == failed ]]
+}
+expect_invalid_protocol unconstrained nvt.mdp 's/^constraints[[:space:]]*=.*/constraints = none/' 'without bond constraints'
+expect_invalid_protocol regenerated npt.mdp 's/^gen_vel[[:space:]]*=.*/gen_vel = yes/' 'continuation = yes and gen_vel = yes'
+expect_invalid_protocol restarted md.mdp 's/^continuation[[:space:]]*=.*/continuation = no/' 'md.mdp must continue'
+expect_invalid_protocol no-trajectory md.mdp 's/^nstxout-compressed[[:space:]]*=.*/nstxout-compressed = 0/' 'compressed trajectory'
 test_gmx() {
 	case "$1" in
 		--version)
@@ -56,6 +69,10 @@ test_gmx() {
 			;;
 		pdb2gmx)
 			touch topol.top posre.itp
+			;;
+		genion|trjconv|rms|energy)
+			# Read the piped group selection like real GROMACS, avoiding a SIGPIPE race.
+			cat > /dev/null
 			;;
 		mdrun)
 			printf '%s\n' "$*" >> "$GMX_TEST_LOG"
@@ -75,6 +92,8 @@ for mode in cpu gpu; do
 		GROMACS_ACCELERATION="$mode" bash "$runner" smoke "$input_directory" "$temporary_directory/$mode-run" > "$temporary_directory/last-command.log" 2>&1
 	[[ $(< "$temporary_directory/$mode-run/run-status.txt") == completed ]]
 	grep -qx "acceleration=$mode" "$temporary_directory/$mode-run/run-provenance.txt"
+	grep -qP '^md\tmd\t0.002\t1000\t2\t300\tC-rescale\t1.0\tno$' "$temporary_directory/$mode-run/protocol-summary.tsv"
+	grep -qP '^nvt\tmd\t0.002\t1000\t2\t300\tno\t\tyes$' "$temporary_directory/$mode-run/protocol-summary.tsv"
 	grep -Fxq 'mdrun -deffnm em -ntmpi 1 -ntomp 2 -nb cpu' "$temporary_directory/$mode-commands.log"
 	for phase in nvt npt md; do
 		grep -Fxq "mdrun -deffnm $phase -ntmpi 1 -ntomp 2 -nb $mode -pme cpu -bonded cpu -update cpu" "$temporary_directory/$mode-commands.log"
